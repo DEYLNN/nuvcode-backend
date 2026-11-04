@@ -7,7 +7,7 @@ pub const BASE_URL: &str = "https://api.cline.bot/api";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 64;
 pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 90;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 180;
-pub const USER_AGENT: &str = "axumrouter/1.0";
+pub const USER_AGENT: &str = "nuvcode/1.0";
 /// Model which still thinks internally (Cline-side) but whose reasoning
 /// content is suppressed downstream — only final answer reaches the agent.
 pub const HIDE_REASONING_MODEL: &str = "cline-pass";

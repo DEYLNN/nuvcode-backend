@@ -10,7 +10,7 @@ pub const BASE_URL: &str = ""; // TODO: fill when ready
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
 pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 200;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 360;
-pub const USER_AGENT: &str = "axumrouter/1.0";
+pub const USER_AGENT: &str = "nuvcode/1.0";
 
 #[derive(Debug, Clone)]
 pub struct ModelDef {

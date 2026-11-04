@@ -18,7 +18,7 @@ pub async fn init(database_url: &str) -> anyhow::Result<SqlitePool> {
                     let _ = std::fs::create_dir_all(&backup_dir);
                 }
                 let ts = Local::now().format("%Y%m%d_%H%M%S");
-                let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("axumrouter.db");
+                let filename = p.file_name().and_then(|n| n.to_str()).unwrap_or("nuvcode.db");
                 let backup_path = backup_dir.join(format!("{}.{}.bak", filename, ts));
                 if let Err(e) = std::fs::copy(p, &backup_path) {
                     tracing::warn!("Backup failed: {} (path: {:?})", e, backup_path);

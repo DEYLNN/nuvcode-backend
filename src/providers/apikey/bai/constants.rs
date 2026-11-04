@@ -7,7 +7,7 @@ pub const BASE_URL: &str = "https://api.b.ai/v1";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
 pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 200;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 360;
-pub const USER_AGENT: &str = "axumrouter/1.0";
+pub const USER_AGENT: &str = "nuvcode/1.0";
 
 /// B.AI models — all thinking. reasoning_content hidden downstream.
 pub const THINKING_TAGS: &[&str] = &["think", "thinking", "reasoning"];

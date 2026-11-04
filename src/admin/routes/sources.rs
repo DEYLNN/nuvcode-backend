@@ -35,7 +35,7 @@ pub async fn api_list_sources(State(state): State<Arc<crate::state::AppState>>) 
     let archive_template = format!("https://github.com/{}/archive/refs/heads/{{branch}}.zip", repo_slug);
 
     let client = match reqwest::Client::builder()
-        .user_agent("axumrouter")
+        .user_agent("nuvcode")
         .build()
     {
         Ok(c) => c,

@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     tracing::info!(
-        "AxumRouter listening on {}:{}",
+        "NuvCode listening on {}:{}",
         app_state.config.server.host,
         app_state.config.server.port
     );

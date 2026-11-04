@@ -1,5 +1,5 @@
 [package]
-name = "axumrouter"
+name = "nuvcode"
 version = "0.1.0"
 edition = "2021"
 description = "Lightweight AI Gateway — provider-agnostic LLM router built with Rust + Axum"

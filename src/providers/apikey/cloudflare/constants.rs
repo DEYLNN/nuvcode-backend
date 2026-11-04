@@ -7,7 +7,7 @@ pub const BASE_URL: &str = "https://api.cloudflare.com/client/v4/accounts";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 90;
 pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 60;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 120;
-pub const USER_AGENT: &str = "axumrouter/1.0";
+pub const USER_AGENT: &str = "nuvcode/1.0";
 
 pub fn provider_spec() -> crate::providers::spec::ProviderSpec {
     crate::providers::spec::ProviderSpec {

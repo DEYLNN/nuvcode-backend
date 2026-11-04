@@ -7,7 +7,7 @@ pub const BASE_URL: &str = "https://api.zabio.ai/v1";
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
 pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 200;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 360;
-pub const USER_AGENT: &str = "axumrouter/1.0";
+pub const USER_AGENT: &str = "nuvcode/1.0";
 
 /// All Zabio models are thinking models — reasoning is always hidden
 /// downstream: `reasoning_content` field dropped + think-block tags stripped.

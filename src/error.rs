@@ -4,7 +4,7 @@ use axum::Json;
 use serde::Serialize;
 use serde_json::json;
 
-/// Custom error codes returned by AxumRouter's `/v1/*` endpoints.
+/// Custom error codes returned by NuvCode's `/v1/*` endpoints.
 ///
 /// All errors follow the OpenAI-compatible shape:
 /// ```json

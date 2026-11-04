@@ -65,7 +65,7 @@ pub async fn api_validate_models(
     let resp = match client
         .get(&validate_url)
         .header("Authorization", format!("Bearer {}", key_value))
-        .header("User-Agent", "AxumRouter/1.0")
+        .header("User-Agent", "NuvCode/1.0")
         .send()
         .await
     {

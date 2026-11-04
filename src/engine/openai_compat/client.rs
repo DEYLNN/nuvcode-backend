@@ -18,7 +18,7 @@ impl Client {
         let timeout = Duration::from_secs(config.default_timeout_secs.max(30));
         let http = reqwest::Client::builder()
             .timeout(timeout)
-            .user_agent("AxumRouter/0.1.0")
+            .user_agent("NuvCode/0.1.0")
             .build()
             .expect("reqwest Client::new");
         Self { config, http }
