@@ -19,9 +19,11 @@ struct ComboConfig {
 }
 
 async fn fetch_combo(db: &sqlx::PgPool, combo_name: &str) -> Result<ComboConfig, GatewayError> {
-    // combos.is_active is a BIGINT column (0/1), not a BOOLEAN.
+    // combos.is_active is an INTEGER column (0/1) in Postgres — cast to BIGINT
+    // so sqlx can decode it into i64. Without the cast the whole row fails to
+    // decode and the request returns 500 "DB error".
     let row = sqlx::query_as::<_, (String, String, i64, i64)>(
-        "SELECT tiers, strategy, is_active, min_context FROM combos WHERE name = $1 OR id = $2"
+        "SELECT tiers, strategy, is_active::bigint, min_context FROM combos WHERE name = $1 OR id = $2"
     )
     .bind(combo_name)
     .bind(combo_name)
@@ -34,7 +36,12 @@ async fn fetch_combo(db: &sqlx::PgPool, combo_name: &str) -> Result<ComboConfig,
     })?;
 
     let (tiers_str, strategy, is_active, min_context) = row;
+    tracing::info!(
+        "COMBO FETCH: name={} strategy={} is_active={} min_context={}",
+        combo_name, strategy, is_active, min_context
+    );
     if is_active == 0 {
+        tracing::warn!("COMBO FETCH: combo is_active=0, rejecting: {}", combo_name);
         return Err(GatewayError::ModelNotFound {
             provider: "combo".to_string(),
             model: combo_name.to_string(),
@@ -42,7 +49,12 @@ async fn fetch_combo(db: &sqlx::PgPool, combo_name: &str) -> Result<ComboConfig,
     }
 
     let tiers: Vec<String> = serde_json::from_str(&tiers_str)
-        .map_err(|_| GatewayError::Internal("Invalid combo tiers".into()))?;
+        .map_err(|e| {
+            tracing::error!("COMBO FETCH: invalid tiers JSON: {} err={}", tiers_str, e);
+            GatewayError::Internal("Invalid combo tiers".into())
+        })?;
+
+    tracing::info!("COMBO FETCH: {} tiers resolved: {:?}", combo_name, tiers);
 
     if tiers.is_empty() {
         return Err(GatewayError::Internal("Combo has no tiers".into()));

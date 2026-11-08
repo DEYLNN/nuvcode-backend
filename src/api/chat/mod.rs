@@ -33,14 +33,20 @@ async fn chat_completions(
     let start = Instant::now();
     let model = request.model.clone();
 
+    tracing::info!(
+        "CHAT REQUEST: model={} stream={:?} msgs={} gw_key={}",
+        model, request.stream, request.messages.len(), gw_key.key_id
+    );
+
     // ── Pre-checks ──
 
     if crate::db::is_model_disabled(&state.db, &model).await {
+        tracing::warn!("CHAT: model disabled: {}", model);
         return Err(GatewayError::ModelNotFound {
-            provider: "gateway".to_string(), model: model.clone(),
+            provider: "gateway".to_string(),
+            model: model.clone(),
         });
     }
-
     if let Err(e) = crate::services::gateway::check_model_access(&gw_key, &model).await {
         return Err(e);
     }
@@ -60,6 +66,7 @@ async fn chat_completions(
     // to the real provider. Usage is tracked under the real provider, not combo.
     if raw_prefix == "combo" {
         let combo_name = model_name.to_string();
+        tracing::info!("COMBO ROUTE: combo_name={} is_streaming={}", combo_name, is_streaming);
         if is_streaming {
             return combo::handle_combo_request_stream(
                 state, gw_key, request, combo_name, start,
@@ -92,15 +99,18 @@ async fn chat_completions(
         let provider_id = match pm.resolve_provider_id(raw_prefix) {
             Some(id) => id,
             None => {
+                tracing::warn!("CHAT: resolve_provider_id failed for prefix={}", raw_prefix);
                 return Err(GatewayError::ProviderNotFound(raw_prefix.to_string()));
             }
         };
         let provider = match pm.get(&provider_id) {
             Some(p) => p,
             None => {
+                tracing::warn!("CHAT: provider not in active map: {}", provider_id);
                 return Err(GatewayError::ProviderNotFound(provider_id.clone()));
             }
         };
+        tracing::info!("CHAT: resolved prefix={} -> provider_id={}", raw_prefix, provider_id);
         (provider_id, provider)
     }; // read lock released here — Arc clone holds provider alive
 
@@ -123,10 +133,15 @@ async fn chat_completions(
     // row id as the leading segment.
     let model_suffix = model_name.to_string();
     if !all_models.iter().any(|m| m.id == model || m.id.ends_with(&format!("/{}", model_suffix))) {
+        tracing::warn!(
+            "CHAT: model not found. requested={} provider_id={} available_count={}",
+            model, provider_id, all_models.len()
+        );
         return Err(GatewayError::ModelNotFound {
             provider: provider_id.to_string(), model: model_name.to_string(),
         });
     }
+    tracing::info!("CHAT: model verified={} dispatching to provider={}", model, provider_id);
 
     // ── Prepare request ──
 
