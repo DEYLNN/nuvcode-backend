@@ -35,7 +35,7 @@ pub async fn api_list_combos(
     State(state): State<Arc<AppState>>,
 ) -> Json<Vec<ComboResponse>> {
     let rows = sqlx::query_as::<_, (String, String, String, String, i64, i64, String, String)>(
-        "SELECT id, name, strategy, tiers, is_active, min_context, created_at, updated_at FROM combos ORDER BY created_at DESC"
+        "SELECT id, name, strategy, tiers, is_active::bigint, min_context, created_at, updated_at FROM combos ORDER BY created_at DESC"
     )
     .fetch_all(&state.db)
     .await

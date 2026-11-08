@@ -102,7 +102,7 @@ pub async fn api_list_keys(
 
     let count_sql = format!("SELECT COUNT(*) FROM api_keys{}", where_sql);
     let list_sql = format!(
-        "SELECT id, provider_id, label, COALESCE(key_type, 'apikey'), key_value, is_active, locked_until, last_error_status, last_error_message, last_error_at, backoff_level, consecutive_error_count, created_at FROM api_keys{} ORDER BY provider_id, created_at DESC LIMIT ${bind_idx} OFFSET ${offset_idx}",
+        "SELECT id, provider_id, label, COALESCE(key_type, 'apikey'), key_value, is_active, locked_until, last_error_status::bigint, last_error_message, last_error_at, backoff_level, consecutive_error_count, created_at FROM api_keys{} ORDER BY provider_id, created_at DESC LIMIT ${bind_idx} OFFSET ${offset_idx}",
         where_sql,
         offset_idx = bind_idx + 1
     );
