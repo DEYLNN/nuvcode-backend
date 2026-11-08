@@ -19,6 +19,26 @@ async fn list_models(
 ) -> Json<ModelListResponse> {
     let mut models = state.provider_manager.read().await.list_all_models().await;
 
+    // Layer 0: Append active combos as virtual models.
+    // A combo like "agent" surfaces as "combo/agent" so clients can request it
+    // the same way they request "kc/nemotron-3.5-super-vl:free".
+    {
+        let combo_rows: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT name, min_context FROM combos WHERE is_active = 1 ORDER BY name"
+        )
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default();
+        for (name, min_ctx) in combo_rows {
+            models.push(crate::types::model::Model {
+                id: format!("combo/{}", name),
+                object: "model".to_string(),
+                owned_by: "combo".to_string(),
+                context_length: if min_ctx > 0 { Some(min_ctx as u32) } else { None },
+            });
+        }
+    }
+
     // Layer 1: Filter out globally disabled models (always applied)
     let disabled: std::collections::HashSet<String> = sqlx::query_scalar("SELECT model_id FROM disabled_models")
         .fetch_all(&state.db)
