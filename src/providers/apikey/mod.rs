@@ -1,4 +1,5 @@
 pub mod agentrouter;
+pub mod agnes;
 pub mod antseed;
 pub mod bai;
 pub mod cline;
@@ -6,6 +7,7 @@ pub mod cloudflare;
 pub mod fusioncode;
 pub mod hcnsec;
 pub mod inferhub;
+pub mod nostate;
 pub mod sonogami;
 pub mod sophnet;
 pub mod threerouter;

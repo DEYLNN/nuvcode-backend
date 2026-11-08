@@ -95,9 +95,9 @@ pub async fn api_list_custom_providers(
     let rows = crate::db::list_custom_providers(&state.db).await.unwrap_or_default();
     let mut out = Vec::new();
     for r in &rows {
-        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=?")
+        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=$1")
             .bind(&r.id).fetch_one(&state.db).await.unwrap_or(0);
-        let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=? AND is_active=1")
+        let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=$1 AND is_active=true")
             .bind(&r.id).fetch_one(&state.db).await.unwrap_or(0);
         let models = crate::db::list_custom_provider_models(&state.db, &r.id).await.unwrap_or_default();
         let mlist: Vec<serde_json::Value> = models.iter().map(|m| {
@@ -126,9 +126,9 @@ pub async fn api_get_custom_provider(
         Some(r) => r,
         None => return Json(serde_json::json!({"error": "Not found"})),
     };
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=?")
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=$1")
         .bind(&id).fetch_one(&state.db).await.unwrap_or(0);
-    let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=? AND is_active=1")
+    let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id=$1 AND is_active=true")
         .bind(&id).fetch_one(&state.db).await.unwrap_or(0);
     let models = crate::db::list_custom_provider_models(&state.db, &id).await.unwrap_or_default();
     let mlist: Vec<serde_json::Value> = models.iter().map(|m| {

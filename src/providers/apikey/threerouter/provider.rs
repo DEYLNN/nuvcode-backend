@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db::models::ApiKey;
 use crate::error::GatewayError;
@@ -33,7 +33,7 @@ fn is_key_error(status: Option<u16>) -> bool {
 }
 
 impl ThreeProvider {
-    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<SqlitePool>) -> Self {
+    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<PgPool>) -> Self {
         let metadata = ProviderMetadata {
             name: constants::PROVIDER_ID.to_string(),
             display_name: constants::PROVIDER_NAME.to_string(),

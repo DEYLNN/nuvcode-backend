@@ -18,9 +18,10 @@ struct ComboConfig {
     min_context: i64,
 }
 
-async fn fetch_combo(db: &sqlx::SqlitePool, combo_name: &str) -> Result<ComboConfig, GatewayError> {
-    let row = sqlx::query_as::<_, (String, String, bool, i64)>(
-        "SELECT tiers, strategy, is_active, min_context FROM combos WHERE name = ? OR id = ?"
+async fn fetch_combo(db: &sqlx::PgPool, combo_name: &str) -> Result<ComboConfig, GatewayError> {
+    // combos.is_active is a BIGINT column (0/1), not a BOOLEAN.
+    let row = sqlx::query_as::<_, (String, String, i64, i64)>(
+        "SELECT tiers, strategy, is_active, min_context FROM combos WHERE name = $1 OR id = $2"
     )
     .bind(combo_name)
     .bind(combo_name)
@@ -33,7 +34,7 @@ async fn fetch_combo(db: &sqlx::SqlitePool, combo_name: &str) -> Result<ComboCon
     })?;
 
     let (tiers_str, strategy, is_active, min_context) = row;
-    if !is_active {
+    if is_active == 0 {
         return Err(GatewayError::ModelNotFound {
             provider: "combo".to_string(),
             model: combo_name.to_string(),
@@ -159,47 +160,54 @@ pub(crate) async fn handle_combo_request(
     start: Instant,
 ) -> Result<axum::response::Response, GatewayError> {
     let cfg = fetch_combo(&state.db, &combo_name).await?;
-    let pm = state.provider_manager.read().await;
+
+    // Resolve all tiers under read lock, clone Arc, release lock before any HTTP call
+    let tier_providers: Vec<(usize, String, String, String, Arc<dyn crate::providers::traits::Provider>)> = {
+        let pm = state.provider_manager.read().await;
+        let estimated = if cfg.strategy == "balanced" {
+            estimate_input_tokens(&request)
+        } else {
+            0
+        };
+        let tier_order = compute_tier_order(&pm, &cfg, estimated).await;
+
+        tracing::info!(
+            "COMBO: name={} strategy={} tiers={:?} estimated_tokens={} order={:?}",
+            combo_name, cfg.strategy, cfg.tiers, estimated, tier_order
+        );
+
+        let mut resolved = Vec::new();
+        for idx in tier_order {
+            let tier_model = &cfg.tiers[idx];
+            let (raw_prefix, model_name) = match tier_model.split_once('/') {
+                Some((p, m)) => (p, m),
+                None => continue,
+            };
+            let provider_id = match pm.resolve_provider_id(raw_prefix) {
+                Some(id) => id,
+                None => {
+                    tracing::warn!("COMBO: resolve_provider_id failed for raw_prefix={:?}", raw_prefix);
+                    continue;
+                }
+            };
+            let provider = match pm.get(&provider_id) {
+                Some(p) => p,
+                None => {
+                    tracing::warn!("COMBO: provider not found in active map: {:?}", provider_id);
+                    continue;
+                }
+            };
+            resolved.push((idx, tier_model.clone(), model_name.to_string(), provider_id.clone(), provider));
+        }
+        resolved
+    }; // read lock released here
+
     let mut last_error = None;
-
-    let estimated = if cfg.strategy == "balanced" {
-        estimate_input_tokens(&request)
-    } else {
-        0 // fallback & round_robin don't need estimation — they use min(ctx tiers)
-    };
-    let tier_order = compute_tier_order(&pm, &cfg, estimated).await;
-
-    tracing::info!(
-        "COMBO: name={} strategy={} tiers={:?} estimated_tokens={} order={:?}",
-        combo_name, cfg.strategy, cfg.tiers, estimated, tier_order
-    );
-
-    for idx in tier_order {
-        let tier_model = &cfg.tiers[idx];
-        let (raw_prefix, model_name) = match tier_model.split_once('/') {
-            Some((p, m)) => (p, m),
-            None => continue,
-        };
-
-        let provider_id = match pm.resolve_provider_id(raw_prefix) {
-            Some(id) => id,
-            None => {
-                tracing::warn!("COMBO: resolve_provider_id failed for raw_prefix={:?}", raw_prefix);
-                continue;
-            }
-        };
-        let provider = match pm.get(&provider_id) {
-            Some(p) => p,
-            None => {
-                tracing::warn!("COMBO: provider not found in active map: {:?}", provider_id);
-                continue;
-            }
-        };
-
+    for (idx, tier_model, model_name, provider_id, provider) in tier_providers {
         let mut tier_req = request.clone();
-        tier_req.model = model_name.to_string();
+        tier_req.model = model_name.clone();
 
-        tracing::info!("COMBO: sending to provider={} model={}", provider_id, tier_req.model);
+        tracing::info!("COMBO: sending to provider model={}", tier_req.model);
 
         match provider.chat_completion(tier_req).await {
             Ok(result) => {
@@ -215,7 +223,7 @@ pub(crate) async fn handle_combo_request(
                     &state.usage_tracker,
                     start,
                     &provider_id,
-                    tier_model,
+                    &tier_model,
                     &gw_key.key_id,
                     result.used_key_id.as_deref(),
                     "/v1/chat/completions",
@@ -231,11 +239,11 @@ pub(crate) async fn handle_combo_request(
                     &state.usage_tracker,
                     start,
                     &provider_id,
-                    tier_model,
+                    &tier_model,
                     &gw_key.key_id,
                     None,
                     "/v1/chat/completions",
-                    status as i32,
+                    status as i64,
                     &e.to_string(),
                 ).await;
                 last_error = Some(e);
@@ -243,7 +251,6 @@ pub(crate) async fn handle_combo_request(
         }
     }
 
-    drop(pm);
     let err_msg = match last_error {
         Some(e) => format!("All combo tiers failed. Last error: {}", e),
         None => "All combo tiers failed: no tiers defined or all skipped".into(),
@@ -261,59 +268,64 @@ pub(crate) async fn handle_combo_request_stream(
     start: Instant,
 ) -> Result<axum::response::Response, GatewayError> {
     let cfg = fetch_combo(&state.db, &combo_name).await?;
-    let pm = state.provider_manager.read().await;
+
+    // Resolve all tiers under read lock, clone Arc, release lock before any HTTP call
+    let tier_providers: Vec<(usize, String, String, String, Arc<dyn crate::providers::traits::Provider>)> = {
+        let pm = state.provider_manager.read().await;
+        let estimated = if cfg.strategy == "balanced" {
+            estimate_input_tokens(&request)
+        } else {
+            0
+        };
+        let tier_order = compute_tier_order(&pm, &cfg, estimated).await;
+
+        tracing::info!(
+            "COMBO STREAM: name={} strategy={} tiers={:?} estimated_tokens={} order={:?}",
+            combo_name, cfg.strategy, cfg.tiers, estimated, tier_order
+        );
+
+        let mut resolved = Vec::new();
+        for idx in tier_order {
+            let tier_model = &cfg.tiers[idx];
+            let (raw_prefix, model_name) = match tier_model.split_once('/') {
+                Some((p, m)) => (p, m),
+                None => continue,
+            };
+            let provider_id = match pm.resolve_provider_id(raw_prefix) {
+                Some(id) => id,
+                None => continue,
+            };
+            let provider = match pm.get(&provider_id) {
+                Some(p) => p,
+                None => continue,
+            };
+            resolved.push((idx, tier_model.clone(), model_name.to_string(), provider_id.clone(), provider));
+        }
+        resolved
+    }; // read lock released here
+
     let mut last_error = None;
-
-    let estimated = if cfg.strategy == "balanced" {
-        estimate_input_tokens(&request)
-    } else {
-        0 // fallback & round_robin don't need estimation — they use min(ctx tiers)
-    };
-    let tier_order = compute_tier_order(&pm, &cfg, estimated).await;
-
-    tracing::info!(
-        "COMBO STREAM: name={} strategy={} tiers={:?} estimated_tokens={} order={:?}",
-        combo_name, cfg.strategy, cfg.tiers, estimated, tier_order
-    );
-
-    for idx in tier_order {
-        let tier_model = &cfg.tiers[idx];
-        let (raw_prefix, model_name) = match tier_model.split_once('/') {
-            Some((p, m)) => (p, m),
-            None => continue,
-        };
-
-        let provider_id = match pm.resolve_provider_id(raw_prefix) {
-            Some(id) => id,
-            None => continue,
-        };
-        let provider = match pm.get(&provider_id) {
-            Some(p) => p,
-            None => continue,
-        };
-
+    for (idx, tier_model, model_name, _provider_id, provider) in tier_providers {
         let mut tier_req = request.clone();
-        tier_req.model = model_name.to_string();
+        tier_req.model = model_name.clone();
         tier_req.stream = Some(true);
         if tier_req.stream_options.is_none() {
             tier_req.stream_options = Some(serde_json::json!({"include_usage": true}));
         }
 
         match crate::api::chat::streaming::handle_streaming(
-            &state, &gw_key, provider, &provider_id, tier_model, &tier_req, start,
+            &state, &gw_key, provider.as_ref(), tier_model.as_str(), tier_model.as_str(), &tier_req, start,
         ).await {
             Ok(resp) => {
-                drop(pm);
                 return Ok(resp);
             }
             Err(e) => {
-                tracing::warn!("COMBO STREAM: tier[{}] FAILED provider={} model={} error={}", idx, provider_id, model_name, e);
+                tracing::warn!("COMBO STREAM: tier[{}] FAILED model={} error={}", idx, model_name, e);
                 last_error = Some(e);
             }
         }
     }
 
-    drop(pm);
     let err_msg = match last_error {
         Some(e) => format!("All combo tiers failed. Last error: {}", e),
         None => "All combo tiers failed: no tiers defined or all skipped".into(),

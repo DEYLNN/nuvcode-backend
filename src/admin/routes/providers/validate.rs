@@ -21,7 +21,7 @@ pub async fn api_validate_models(
 
     let key_row = if let Some(kid) = key_id {
         sqlx::query_as::<_, (String,)>(
-            "SELECT key_value FROM api_keys WHERE id = ? AND provider_id = ? AND is_active = 1 LIMIT 1",
+            "SELECT key_value FROM api_keys WHERE id = $1 AND provider_id = $2 AND is_active = true LIMIT 1",
         )
         .bind(kid)
         .bind(&provider_id)
@@ -30,7 +30,7 @@ pub async fn api_validate_models(
         .unwrap_or(None)
     } else {
         sqlx::query_as::<_, (String,)>(
-            "SELECT key_value FROM api_keys WHERE provider_id = ? AND is_active = 1 LIMIT 1",
+            "SELECT key_value FROM api_keys WHERE provider_id = $1 AND is_active = true LIMIT 1",
         )
         .bind(&provider_id)
         .fetch_optional(&state.db)

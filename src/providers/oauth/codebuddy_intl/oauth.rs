@@ -44,6 +44,6 @@ pub async fn refresh(refresh_token:&str)->Result<Value,String>{
 pub async fn save_token(state:&Arc<AppState>,data:&Value)->Result<(),String>{
     let id=format!("key_{}",&uuid::Uuid::new_v4().to_string()[..8]);let now=chrono::Utc::now().to_rfc3339();
     let value=json!({"access_token":data["access_token"],"refresh_token":data["refresh_token"],"expires_at":data["expires_in"].as_i64().map(|s|chrono::Utc::now().timestamp()+s),"email":data["email"]}).to_string();
-    sqlx::query("INSERT INTO api_keys (id,provider_id,key_value,label,is_active,key_type,created_at,updated_at) VALUES (?, 'cbai', ?, 'CodeBuddy', 1, 'oauth', ?, ?)").bind(&id).bind(value).bind(&now).bind(&now).execute(&state.db).await.map_err(|e|format!("CodeBuddy DB: {e}"))?;
+    sqlx::query("INSERT INTO api_keys (id,provider_id,key_value,label,is_active,key_type,created_at,updated_at) VALUES ($1, 'cbai', $2, 'CodeBuddy', true, 'oauth', $3, $4)").bind(&id).bind(value).bind(&now).bind(&now).execute(&state.db).await.map_err(|e|format!("CodeBuddy DB: {e}"));
     let _=state.provider_manager.write().await.reload_provider("cbai").await;Ok(())
 }

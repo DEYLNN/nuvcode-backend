@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{extract::State, Json};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::state::AppState;
 
 // Tables excluded from export/import — too large or contain transient data.
 const EXCLUDED_TABLES: &[&str] = &["request_logs", "usage"];
 
-async fn fetch_all_tables(db: &SqlitePool) -> Vec<String> {
+async fn fetch_all_tables(db: &PgPool) -> Vec<String> {
     sqlx::query_scalar::<_, String>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('sqlite_sequence') ORDER BY name"
     )
@@ -18,7 +18,7 @@ async fn fetch_all_tables(db: &SqlitePool) -> Vec<String> {
     .unwrap_or_default()
 }
 
-async fn fetch_columns(db: &SqlitePool, table: &str) -> Vec<String> {
+async fn fetch_columns(db: &PgPool, table: &str) -> Vec<String> {
     sqlx::query_scalar::<_, String>(
         &format!("SELECT name FROM pragma_table_info('{}') ORDER BY cid", table)
     )

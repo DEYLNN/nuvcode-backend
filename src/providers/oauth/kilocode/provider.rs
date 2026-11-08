@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db::models::ApiKey;
 use crate::error::GatewayError;
@@ -22,11 +22,11 @@ pub struct KlProvider {
     keys: KeyManager,
     client: KlClient,
     mapper: KlMapper,
-    db: Option<SqlitePool>,
+    db: Option<PgPool>,
 }
 
 impl KlProvider {
-    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<SqlitePool>) -> Self {
+    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<PgPool>) -> Self {
         let metadata = ProviderMetadata {
             name: constants::PROVIDER_ID.to_string(),
             display_name: constants::PROVIDER_NAME.to_string(),
@@ -96,7 +96,6 @@ impl Provider for KlProvider {
                 Ok(c) => c,
                 Err(e) => {
                     let msg = e;
-                    self.keys.lock_key(&key_id, 400, msg.clone());
                     excluded.push(key_id.clone());
                     last_error = Some(msg.clone());
                     last_status = Some(400);
@@ -113,7 +112,6 @@ impl Provider for KlProvider {
                 Err(e) => {
                     let msg = e.to_string();
                     let st = e.http_status().unwrap_or(502);
-                    self.keys.lock_key(&key_id, st, msg.clone());
                     last_error = Some(msg.clone());
                     last_status = Some(st);
                     failed.push(FailedKeyAttempt { key_id: key_id.clone(), error: e });
@@ -148,7 +146,6 @@ impl Provider for KlProvider {
                 Ok(c) => c,
                 Err(e) => {
                     let msg = e;
-                    self.keys.lock_key(&key_id, 400, msg.clone());
                     excluded.push(key_id.clone());
                     last_error = Some(msg.clone());
                     last_status = Some(400);
@@ -171,7 +168,6 @@ impl Provider for KlProvider {
                 Err(e) => {
                     let msg = e.to_string();
                     let st = e.http_status().unwrap_or(502);
-                    self.keys.lock_key(&key_id, st, msg.clone());
                     last_error = Some(msg.clone());
                     last_status = Some(st);
                     last_attempted_key_id = Some(key_id.clone());

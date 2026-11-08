@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use serde_json::json;
 
 use crate::db::models::ApiKey;
@@ -23,11 +23,11 @@ pub struct CxProvider {
     keys: KeyManager,
     client: CxClient,
     mapper: CxMapper,
-    db: Option<SqlitePool>,
+    db: Option<PgPool>,
 }
 
 impl CxProvider {
-    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<SqlitePool>) -> Self {
+    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<PgPool>) -> Self {
         let metadata = ProviderMetadata {
             name: constants::PROVIDER_ID.to_string(),
             display_name: constants::PROVIDER_NAME.to_string(),
@@ -92,7 +92,7 @@ impl CxProvider {
             "account_id": cred.account_id,
         }))
         .map_err(|e| GatewayError::ProviderError(format!("Codex refresh serialize: {e}")))?;
-        sqlx::query("UPDATE api_keys SET key_value = ?, updated_at = ? WHERE id = ?")
+        sqlx::query("UPDATE api_keys SET key_value = $1, updated_at = $2 WHERE id = $3")
             .bind(&key_value)
             .bind(chrono::Utc::now().to_rfc3339())
             .bind(&key.id)

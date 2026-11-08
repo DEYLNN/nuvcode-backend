@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db::models::ApiKey;
 use crate::engine::anthropic_compat::auth::ApiKeyAuth;
@@ -24,11 +24,11 @@ pub struct AnthropicCompatibleProvider {
     keys: KeyManager,
     client: Client,
     mapper: Mapper,
-    db: Option<SqlitePool>,
+    db: Option<PgPool>,
 }
 
 impl AnthropicCompatibleProvider {
-    pub fn new(config: AnthropicConfig, keys: Vec<ApiKey>, db: Option<SqlitePool>) -> Self {
+    pub fn new(config: AnthropicConfig, keys: Vec<ApiKey>, db: Option<PgPool>) -> Self {
         let config = Arc::new(config);
         let model_prefix = if config.model_prefix != config.provider_id {
             Some(config.model_prefix.clone())

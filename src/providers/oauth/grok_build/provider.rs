@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use serde_json::json;
 
 use crate::db::models::ApiKey;
@@ -23,11 +23,11 @@ pub struct GbProvider {
     keys: KeyManager,
     client: GbClient,
     mapper: GbMapper,
-    db: Option<SqlitePool>,
+    db: Option<PgPool>,
 }
 
 impl GbProvider {
-    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<SqlitePool>) -> Self {
+    pub fn new_with_keys(keys: Vec<ApiKey>, db: Arc<PgPool>) -> Self {
         let metadata = ProviderMetadata {
             name: constants::PROVIDER_ID.to_string(),
             display_name: constants::PROVIDER_NAME.to_string(),
@@ -79,7 +79,7 @@ impl GbProvider {
         let new_refresh = data["refresh_token"].as_str().unwrap_or(&refresh_token);
         let key_value = serde_json::to_string(&json!({"access_token": access_token, "refresh_token": new_refresh, "expires_at": expires_at, "email": cred.email}))
             .map_err(|e| GatewayError::ProviderError(format!("GrokBuild refresh serialize: {e}")))?;
-        sqlx::query("UPDATE api_keys SET key_value = ?, updated_at = ? WHERE id = ?")
+        sqlx::query("UPDATE api_keys SET key_value = $1, updated_at = $2 WHERE id = $3")
             .bind(&key_value).bind(chrono::Utc::now().to_rfc3339()).bind(&key.id)
             .execute(self.db.as_ref().ok_or_else(|| GatewayError::ProviderError("GrokBuild: DB unavailable".into()))?)
             .await.map_err(|e| GatewayError::ProviderError(format!("GrokBuild refresh DB: {e}")))?;

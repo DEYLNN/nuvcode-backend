@@ -317,7 +317,7 @@ impl ResponsesStreamParser {
                 }
             }
             // Per-step reasoning summary text. Sent as `reasoning_content`
-            // (deepseek/glm convention — Axumrouter already supports it).
+            // (deepseek/glm convention — NuvCode already supports it).
             Some("response.reasoning_summary_text.delta") => {
                 if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
                     if !delta.is_empty() {
@@ -402,7 +402,7 @@ impl ResponsesStreamParser {
                                 })
                                 .unwrap_or_default();
                             // Emit a chunk that opens the tool_call entry
-                            // (with id + name + empty arguments). Axumrouter's
+                            // (with id + name + empty arguments). NuvCode's
                             // dispatcher expects `tool_calls[*].index` to
                             // stay stable for the whole call.
                             out.push(json!({

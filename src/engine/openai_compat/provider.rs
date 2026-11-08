@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db::models::ApiKey;
 use crate::engine::openai_compat::auth::ApiKeyAuth;
@@ -24,11 +24,11 @@ pub struct OpenAICompatibleProvider {
     keys: KeyManager,
     client: Client,
     mapper: Mapper,
-    db: Option<SqlitePool>,
+    db: Option<PgPool>,
 }
 
 impl OpenAICompatibleProvider {
-    pub fn new(config: OpenAIConfig, keys: Vec<ApiKey>, db: Option<SqlitePool>) -> Self {
+    pub fn new(config: OpenAIConfig, keys: Vec<ApiKey>, db: Option<PgPool>) -> Self {
         let config = Arc::new(config);
         let model_prefix = if config.model_prefix != config.provider_id {
             Some(config.model_prefix.clone())

@@ -13,6 +13,9 @@ pub struct GatewayKeyJson {
     pub id: String,
     pub key_value: String,
     pub label: Option<String>,
+    /// `is_active` is a BOOLEAN column in Postgres. Stored as `i64` here (0/1)
+    /// because the frontend expects a number, not a JSON boolean — the FE's
+    /// `GatewayKeyJson` interface declares `is_active: number`.
     pub is_active: i64,
     pub access_type: String,
     pub allowed_models: Vec<String>,
@@ -21,7 +24,7 @@ pub struct GatewayKeyJson {
 }
 
 pub async fn api_list_keys(State(state): State<Arc<AppState>>) -> Json<Vec<GatewayKeyJson>> {
-    let rows = sqlx::query_as::<_, (String, String, Option<String>, i64, String, String, i64, String)>(
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, bool, String, String, i64, String)>(
         "SELECT id, key_value, label, is_active, access_type, allowed_models, max_tokens, created_at FROM gateway_keys ORDER BY created_at DESC"
     )
     .fetch_all(&state.db)
@@ -34,7 +37,7 @@ pub async fn api_list_keys(State(state): State<Arc<AppState>>) -> Json<Vec<Gatew
         } else {
             serde_json::from_str(&allowed_models_str).unwrap_or_default()
         };
-        GatewayKeyJson { id, key_value, label, is_active, access_type, allowed_models, max_tokens, created_at }
+        GatewayKeyJson { id, key_value, label, is_active: is_active as i64, access_type, allowed_models, max_tokens, created_at }
     })
     .collect();
     Json(rows)
@@ -76,7 +79,7 @@ pub async fn api_create_key(
     let max_tokens = req.max_tokens.unwrap_or(0);
 
     let result = sqlx::query(
-        "INSERT INTO gateway_keys (id, key_value, label, access_type, allowed_models, max_tokens) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO gateway_keys (id, key_value, label, access_type, allowed_models, max_tokens) VALUES ($1, $2, $3, $4, $5, $6)"
     )
     .bind(&id)
     .bind(&key_value)
@@ -118,24 +121,24 @@ pub async fn api_update_key(
     Json(req): Json<UpdateKeyRequest>,
 ) -> Json<serde_json::Value> {
     if let Some(label) = &req.label {
-        let _ = sqlx::query("UPDATE gateway_keys SET label = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE gateway_keys SET label = $1 WHERE id = $2")
             .bind(label).bind(&id).execute(&state.db).await;
     }
     if let Some(is_active) = req.is_active {
-        let _ = sqlx::query("UPDATE gateway_keys SET is_active = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE gateway_keys SET is_active = $1 WHERE id = $2")
             .bind(is_active as i64).bind(&id).execute(&state.db).await;
     }
     if let Some(access_type) = &req.access_type {
-        let _ = sqlx::query("UPDATE gateway_keys SET access_type = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE gateway_keys SET access_type = $1 WHERE id = $2")
             .bind(access_type).bind(&id).execute(&state.db).await;
     }
     if let Some(allowed_models) = &req.allowed_models {
         let json = serde_json::to_string(allowed_models).unwrap_or_default();
-        let _ = sqlx::query("UPDATE gateway_keys SET allowed_models = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE gateway_keys SET allowed_models = $1 WHERE id = $2")
             .bind(&json).bind(&id).execute(&state.db).await;
     }
     if let Some(max_tokens) = req.max_tokens {
-        let _ = sqlx::query("UPDATE gateway_keys SET max_tokens = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE gateway_keys SET max_tokens = $1 WHERE id = $2")
             .bind(max_tokens).bind(&id).execute(&state.db).await;
     }
     Json(serde_json::json!({"success": true}))
@@ -145,7 +148,7 @@ pub async fn api_delete_key(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
-    let result = sqlx::query("DELETE FROM gateway_keys WHERE id = ?")
+    let result = sqlx::query("DELETE FROM gateway_keys WHERE id = $1")
         .bind(&id)
         .execute(&state.db)
         .await;

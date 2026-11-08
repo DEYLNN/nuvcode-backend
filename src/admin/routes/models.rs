@@ -25,13 +25,13 @@ pub async fn api_toggle_model(
 ) -> Json<ToggleModelResponse> {
     if req.enabled {
         // Enable: remove from disabled list
-        let _ = sqlx::query("DELETE FROM disabled_models WHERE model_id = ?")
+        let _ = sqlx::query("DELETE FROM disabled_models WHERE model_id = $1")
             .bind(&req.model_id)
             .execute(&state.db)
             .await;
     } else {
         // Disable: add to disabled list
-        let _ = sqlx::query("INSERT OR IGNORE INTO disabled_models (model_id) VALUES (?)")
+        let _ = sqlx::query("INSERT INTO disabled_models (model_id) VALUES ($1)")
             .bind(&req.model_id)
             .execute(&state.db)
             .await;
@@ -135,13 +135,13 @@ pub async fn api_bulk_toggle(
         }
         let r = if req.enabled {
             // Enable: remove from disabled list
-            sqlx::query("DELETE FROM disabled_models WHERE model_id = ?")
+            sqlx::query("DELETE FROM disabled_models WHERE model_id = $1")
                 .bind(&m.id)
                 .execute(&state.db)
                 .await
         } else {
             // Disable: add to disabled list
-            sqlx::query("INSERT OR IGNORE INTO disabled_models (model_id) VALUES (?)")
+            sqlx::query("INSERT INTO disabled_models (model_id) VALUES ($1)")
                 .bind(&m.id)
                 .execute(&state.db)
                 .await

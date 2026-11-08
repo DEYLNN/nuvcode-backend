@@ -52,7 +52,7 @@ pub(crate) async fn handle_streaming(
                     &gateway_key_id,
                     Some(&failed.key_id),
                     &endpoint,
-                    failed.error.http_status().unwrap_or(503) as i32,
+                    failed.error.http_status().unwrap_or(503) as i64,
                     &failed.error.to_string(),
                 )
                 .await;
@@ -133,7 +133,7 @@ pub(crate) async fn handle_streaming(
                                 let gw_e = gateway_key_id_w.clone();
                                 let ep_e = endpoint_w.clone();
                                 let key_e = key_id_w.clone();
-                                let status_e = e.http_status().unwrap_or(502) as i32;
+                                let status_e = e.http_status().unwrap_or(502) as i64;
                                 let msg_e = e.to_string();
                                 tokio::spawn(async move {
                                     record_error(
@@ -200,7 +200,7 @@ pub(crate) async fn handle_streaming(
                 &gateway_key_id,
                 e.provider_api_key_id(),
                 &endpoint,
-                e.http_status().unwrap_or(500) as i32,
+                e.http_status().unwrap_or(500) as i64,
                 &e.to_string(),
             )
             .await;

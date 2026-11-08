@@ -74,32 +74,37 @@ pub async fn api_list_keys(
     let per_page = q.per_page.unwrap_or(100).clamp(1, 200);
     let offset = (page - 1) * per_page;
 
-    // Build dynamic WHERE
+    // Build dynamic WHERE — PostgreSQL uses $N numbered placeholders.
     let mut where_sql = String::from(" WHERE 1=1");
+    let mut bind_idx = 1usize;
     if q.provider_id.is_some() {
-        where_sql.push_str(" AND provider_id = ?");
+        where_sql.push_str(&format!(" AND provider_id = ${bind_idx}"));
+        bind_idx += 1;
     }
     if q.only_disabled.unwrap_or(false) {
-        where_sql.push_str(" AND is_active = 0");
+        where_sql.push_str(" AND is_active = false");
     }
     if q.only_problem.unwrap_or(false) {
         where_sql.push_str(" AND (last_error_status IS NOT NULL OR last_error_message IS NOT NULL)");
     }
     let status_code_filter: Option<i64> = q.status_code.as_ref().and_then(|s| s.parse::<i64>().ok());
     if status_code_filter.is_some() {
-        where_sql.push_str(" AND last_error_status = ?");
+        where_sql.push_str(&format!(" AND last_error_status = ${bind_idx}"));
+        bind_idx += 1;
     }
     // Text search — matches provider_id, label, or key_type. Used by the
     // Auth Files search box. Like-wrapped so partial matches work.
     let query_filter = q.query.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()).map(|s| format!("%{s}%"));
     if query_filter.is_some() {
-        where_sql.push_str(" AND (provider_id LIKE ? OR label LIKE ? OR COALESCE(key_type,'') LIKE ?)");
+        where_sql.push_str(&format!(" AND (provider_id LIKE ${bind_idx} OR label LIKE ${bind_idx} OR COALESCE(key_type,'') LIKE ${bind_idx})"));
+        bind_idx += 1;
     }
 
     let count_sql = format!("SELECT COUNT(*) FROM api_keys{}", where_sql);
     let list_sql = format!(
-        "SELECT id, provider_id, label, COALESCE(key_type, 'apikey'), key_value, is_active, locked_until, last_error_status, last_error_message, last_error_at, backoff_level, consecutive_error_count, created_at FROM api_keys{} ORDER BY provider_id, created_at DESC LIMIT ? OFFSET ?",
-        where_sql
+        "SELECT id, provider_id, label, COALESCE(key_type, 'apikey'), key_value, is_active, locked_until, last_error_status, last_error_message, last_error_at, backoff_level, consecutive_error_count, created_at FROM api_keys{} ORDER BY provider_id, created_at DESC LIMIT ${bind_idx} OFFSET ${offset_idx}",
+        where_sql,
+        offset_idx = bind_idx + 1
     );
 
     // Count with binds
@@ -185,7 +190,7 @@ pub async fn api_dedupe_keys(
          ORDER BY provider_id, key_value";
     let dup_rows: Vec<(String, String, i64, String)> = if let Some(pid) = req.provider_id.as_deref() {
         sqlx::query_as::<_, (String, String, i64, String)>(
-            &format!("{base_query} AND provider_id = ?")
+            &format!("{base_query} AND provider_id = $1")
         )
         .bind(pid)
         .fetch_all(&state.db)
@@ -210,9 +215,9 @@ pub async fn api_dedupe_keys(
         // even if rowids surprise us.
         let r = sqlx::query(
             "DELETE FROM api_keys \
-             WHERE provider_id = ? AND key_value = ? \
+             WHERE provider_id = $1 AND key_value = $2 \
                AND COALESCE(key_type, 'apikey') != 'oauth' \
-               AND created_at != ?"
+               AND created_at != $3"
         )
         .bind(pid)
         .bind(kv)
@@ -260,15 +265,15 @@ pub async fn api_keys_stats(
     let rows = sqlx::query_as::<_, (i64, i64)>(
         "SELECT \
            COUNT(*), \
-           SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) \
+           SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) \
          FROM api_keys WHERE 1=1 \
-           AND (?1 IS NULL OR provider_id = ?1) \
-           AND (?2 = 0 OR is_active = 0) \
-           AND (?3 = 0 OR (last_error_status IS NOT NULL OR last_error_message IS NOT NULL))"
+           AND ($1 IS NULL OR provider_id = $1) \
+           AND ($2 = false OR is_active = false) \
+           AND ($3 = false OR (last_error_status IS NOT NULL OR last_error_message IS NOT NULL))"
     )
     .bind(&q.provider_id)
-    .bind(q.only_disabled.unwrap_or(false) as i64)
-    .bind(q.only_problem.unwrap_or(false) as i64)
+    .bind(q.only_disabled.unwrap_or(false))
+    .bind(q.only_problem.unwrap_or(false))
     .fetch_one(&state.db)
     .await
     .unwrap_or((0, 0));
@@ -314,7 +319,7 @@ pub async fn api_add_key(
     // intentionally excluded from this check — users reconnect manually.
     let dup: Option<String> = sqlx::query_scalar(
         "SELECT id FROM api_keys \
-         WHERE provider_id = ? AND key_value = ? \
+         WHERE provider_id = $1 AND key_value = $2 \
            AND COALESCE(key_type, 'apikey') != 'oauth' LIMIT 1"
     )
     .bind(&req.provider_id)
@@ -331,7 +336,7 @@ pub async fn api_add_key(
     }
 
     let result = sqlx::query(
-        "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type) VALUES (?, ?, ?, ?, 1, ?)",
+        "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type) VALUES ($1, $2, $3, $4, true, $5)",
     )
     .bind(&id)
     .bind(&req.provider_id)
@@ -365,7 +370,7 @@ pub async fn api_add_key(
                 for m in models {
                     if m.id.starts_with(&prefix) {
                         let _ = sqlx::query(
-                            "INSERT OR IGNORE INTO disabled_models (model_id) VALUES (?)",
+                            "INSERT INTO disabled_models (model_id) VALUES ($1)",
                         )
                         .bind(&m.id)
                         .execute(&state.db)
@@ -403,14 +408,14 @@ pub async fn api_delete_key(
     let provider_id: Option<String> = if let Some(pid) = &req.provider_id {
         Some(pid.clone())
     } else {
-        sqlx::query_scalar("SELECT provider_id FROM api_keys WHERE id=?")
+        sqlx::query_scalar("SELECT provider_id FROM api_keys WHERE id=$1")
             .bind(&req.key_id)
             .fetch_optional(&state.db)
             .await
             .unwrap_or(None)
     };
 
-    let result = sqlx::query("DELETE FROM api_keys WHERE id=?")
+    let result = sqlx::query("DELETE FROM api_keys WHERE id=$1")
         .bind(&req.key_id)
         .execute(&state.db)
         .await;
@@ -447,8 +452,8 @@ pub async fn api_toggle_key(
     Json(req): Json<ToggleKeyRequest>,
 ) -> Json<AddKeyResponse> {
     // Update DB
-    let result = sqlx::query("UPDATE api_keys SET is_active=? WHERE id=?")
-        .bind(if req.is_active { 1i64 } else { 0i64 })
+    let result = sqlx::query("UPDATE api_keys SET is_active=$1 WHERE id=$2")
+        .bind(req.is_active)
         .bind(&req.key_id)
         .execute(&state.db)
         .await;
@@ -462,7 +467,7 @@ pub async fn api_toggle_key(
 
     // Sync in-memory KeyManager state — must reload provider to pick up
     // the new is_active for in-flight requests. Reload pulls fresh keys.
-    let provider_id: Option<String> = sqlx::query_scalar("SELECT provider_id FROM api_keys WHERE id=?")
+    let provider_id: Option<String> = sqlx::query_scalar("SELECT provider_id FROM api_keys WHERE id=$1")
         .bind(&req.key_id)
         .fetch_optional(&state.db)
         .await
@@ -470,7 +475,7 @@ pub async fn api_toggle_key(
 
     // Also reset DB-side consecutive_error_count when manually re-enabled.
     if req.is_active {
-        let _ = sqlx::query("UPDATE api_keys SET consecutive_error_count = 0, locked_until = NULL, last_error_status = NULL, last_error_message = NULL, last_error_at = NULL, backoff_level = 0 WHERE id = ?")
+        let _ = sqlx::query("UPDATE api_keys SET consecutive_error_count = 0, locked_until = NULL, last_error_status = NULL, last_error_message = NULL, last_error_at = NULL, backoff_level = 0 WHERE id = $1")
             .bind(&req.key_id)
             .execute(&state.db)
             .await;
@@ -558,7 +563,7 @@ pub async fn api_bulk_add_keys(
         // Check duplicate
         let dup: Option<String> = sqlx::query_scalar(
             "SELECT id FROM api_keys \
-             WHERE provider_id = ? AND key_value = ? \
+             WHERE provider_id = $1 AND key_value = $2 \
                AND COALESCE(key_type, 'apikey') != 'oauth' LIMIT 1"
         )
         .bind(&req.provider_id)
@@ -574,7 +579,7 @@ pub async fn api_bulk_add_keys(
 
         let id = format!("key_{}", &Uuid::new_v4().to_string()[..8]);
         let r = sqlx::query(
-            "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type) VALUES (?, ?, ?, ?, 1, ?)",
+            "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type) VALUES ($1, $2, $3, $4, true, $5)",
         )
         .bind(&id)
         .bind(&req.provider_id)
@@ -607,7 +612,7 @@ pub async fn api_bulk_add_keys(
             for m in models {
                 if m.id.starts_with(&prefix) {
                     let _ = sqlx::query(
-                        "INSERT OR IGNORE INTO disabled_models (model_id) VALUES (?)",
+                        "INSERT INTO disabled_models (model_id) VALUES ($1)",
                     )
                     .bind(&m.id)
                     .execute(&state.db)
@@ -645,9 +650,9 @@ pub async fn api_bulk_enable_keys(
     for key_id in &req.key_ids {
         // 1. Activate + reset error state in one UPDATE (only if currently disabled)
         let r = sqlx::query(
-            "UPDATE api_keys SET is_active=1, consecutive_error_count=0, locked_until=NULL, \
+            "UPDATE api_keys SET is_active=true, consecutive_error_count=0, locked_until=NULL, \
              last_error_status=NULL, last_error_message=NULL, last_error_at=NULL, backoff_level=0 \
-             WHERE id=? AND is_active=0"
+             WHERE id=$1 AND is_active=false"
         )
         .bind(key_id)
         .execute(&state.db)
@@ -657,7 +662,7 @@ pub async fn api_bulk_enable_keys(
             Ok(res) if res.rows_affected() > 0 => {
                 enabled += 1;
                 if let Ok(Some(pid)) = sqlx::query_scalar::<_, String>(
-                    "SELECT provider_id FROM api_keys WHERE id=?"
+                    "SELECT provider_id FROM api_keys WHERE id=$1"
                 ).bind(key_id).fetch_optional(&state.db).await {
                     provider_ids.insert(pid);
                 }
@@ -699,12 +704,12 @@ pub async fn api_count_keys(
     State(state): State<Arc<AppState>>,
     Query(q): Query<CountQuery>,
 ) -> Json<CountResponse> {
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id = ?")
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id = $1")
         .bind(&q.provider_id)
         .fetch_one(&state.db)
         .await
         .unwrap_or(0);
-    let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id = ? AND is_active = 1")
+    let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE provider_id = $1 AND is_active = true")
         .bind(&q.provider_id)
         .fetch_one(&state.db)
         .await
@@ -766,12 +771,12 @@ pub async fn api_bulk_delete_keys(
     }
 
     let result = if req.action == "all" {
-        sqlx::query("DELETE FROM api_keys WHERE provider_id = ?")
+        sqlx::query("DELETE FROM api_keys WHERE provider_id = $1")
             .bind(&req.provider_id)
             .execute(&state.db)
             .await
     } else if let Some(kv) = &req.key_value {
-        sqlx::query("DELETE FROM api_keys WHERE provider_id = ? AND key_value = ?")
+        sqlx::query("DELETE FROM api_keys WHERE provider_id = $1 AND key_value = $2")
             .bind(&req.provider_id)
             .bind(kv)
             .execute(&state.db)

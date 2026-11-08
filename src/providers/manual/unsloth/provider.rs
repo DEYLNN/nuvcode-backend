@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db;
 use crate::error::GatewayError;
@@ -19,12 +19,12 @@ use super::constants;
 /// Errors never lock; requests can always retry.
 pub struct UnslothProvider {
     metadata: ProviderMetadata,
-    db: Arc<SqlitePool>,
+    db: Arc<PgPool>,
     client: UnslothClient,
 }
 
 impl UnslothProvider {
-    pub fn new_with_keys(_keys: Vec<crate::db::models::ApiKey>, db: Arc<SqlitePool>) -> Self {
+    pub fn new_with_keys(_keys: Vec<crate::db::models::ApiKey>, db: Arc<PgPool>) -> Self {
         let metadata = ProviderMetadata {
             name: constants::PROVIDER_ID.to_string(),
             display_name: constants::PROVIDER_NAME.to_string(),

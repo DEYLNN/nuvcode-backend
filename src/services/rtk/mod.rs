@@ -217,7 +217,7 @@ pub fn compress_tool_messages(messages: &mut Vec<Message>) -> RtkStats {
 
 // ── One-liner entry for chat pipeline ──
 
-pub async fn compress(db: &sqlx::SqlitePool, messages: &mut Vec<Message>) {
+pub async fn compress(db: &sqlx::PgPool, messages: &mut Vec<Message>) {
     let enabled: String = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'rtk_enabled'")
         .fetch_one(db)
         .await

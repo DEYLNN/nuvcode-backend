@@ -178,7 +178,7 @@ pub async fn api_usage_quota(
 ) -> Json<QuotaResponse> {
     let quota_where = quota_scope_sql();
     let row = sqlx::query_as::<_, (String, String, String)>(
-        &format!("SELECT key_value, provider_id, created_at FROM api_keys WHERE id = ? AND {quota_where}"),
+        &format!("SELECT key_value, provider_id, created_at FROM api_keys WHERE id = $1 AND {quota_where}"),
     )
     .bind(&key_id)
     .fetch_optional(&state.db)
@@ -217,7 +217,7 @@ pub async fn api_refresh_token(
     Path(key_id): Path<String>,
 ) -> Json<serde_json::Value> {
     let row = sqlx::query_as::<_, (String, String)>(
-        &format!("SELECT key_value, provider_id FROM api_keys WHERE id = ? AND {}", quota_scope_sql()),
+        &format!("SELECT key_value, provider_id FROM api_keys WHERE id = $1 AND {}", quota_scope_sql()),
     ).bind(&key_id).fetch_optional(&state.db).await.unwrap_or(None);
     let Some((raw, provider_id)) = row else { return Json(serde_json::json!({"ok": false, "success": false, "error": "OAuth key not found"})); };
     let mut kv: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
@@ -231,7 +231,7 @@ pub async fn api_refresh_token(
                 if let Some(s) = tokens["expires_in"].as_i64() { kv["expires_at"] = serde_json::Value::String((chrono::Utc::now() + chrono::Duration::seconds(s)).to_rfc3339()); }
                 kv["last_refresh"] = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
                 let expires_at=kv["expires_at"].clone(); let last_refresh=kv["last_refresh"].clone();
-                if sqlx::query("UPDATE api_keys SET key_value = ?, updated_at = datetime('now') WHERE id = ?").bind(kv.to_string()).bind(&key_id).execute(&state.db).await.is_err() { return Json(serde_json::json!({"ok":false,"success":false,"error":"Failed to persist refreshed token"})); }
+                if sqlx::query("UPDATE api_keys SET key_value = $1, updated_at = NOW() WHERE id = $2").bind(kv.to_string()).bind(&key_id).execute(&state.db).await.is_err() { return Json(serde_json::json!({"ok":false,"success":false,"error":"Failed to persist refreshed token"})); }
                 let _=state.provider_manager.write().await.reload_provider(&provider_id).await;
                 return Json(serde_json::json!({"ok":true,"success":true,"message":"Token refreshed","expires_at":expires_at,"last_refresh":last_refresh}));
             },
@@ -257,7 +257,7 @@ pub async fn api_refresh_token(
     let updated = kv.to_string();
     let expires_at = kv.get("expires_at").cloned().unwrap_or(serde_json::Value::Null);
     let last_refresh = kv.get("last_refresh").cloned().unwrap_or(serde_json::Value::Null);
-    if sqlx::query("UPDATE api_keys SET key_value = ?, updated_at = datetime('now') WHERE id = ?").bind(updated).bind(&key_id).execute(&state.db).await.is_err() { return Json(serde_json::json!({"ok": false, "success": false, "error": "Failed to persist refreshed token"})); }
+    if sqlx::query("UPDATE api_keys SET key_value = $1, updated_at = NOW() WHERE id = $2").bind(updated).bind(&key_id).execute(&state.db).await.is_err() { return Json(serde_json::json!({"ok": false, "success": false, "error": "Failed to persist refreshed token"})); }
     let mut manager = state.provider_manager.write().await;
     let _ = manager.reload_provider(&provider_id).await;
     Json(serde_json::json!({"ok": true, "success": true, "message": "Token refreshed", "expires_at": expires_at, "last_refresh": last_refresh}))

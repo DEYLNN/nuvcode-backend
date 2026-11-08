@@ -100,7 +100,7 @@ pub async fn auth_middleware(
     };
 
     let key_id_opt: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM gateway_keys WHERE key_value = ?"
+        "SELECT id FROM gateway_keys WHERE key_value = $1"
     )
     .bind(key_value)
     .fetch_optional(&state.db)
@@ -108,7 +108,7 @@ pub async fn auth_middleware(
     .unwrap_or(None);
 
     let valid: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM gateway_keys WHERE key_value = ? AND is_active = 1)"
+        "SELECT EXISTS(SELECT 1 FROM gateway_keys WHERE key_value = $1 AND is_active = true)"
     )
     .bind(key_value)
     .fetch_one(&state.db)
@@ -126,7 +126,7 @@ pub async fn auth_middleware(
 
     if let Some(kid) = &key_id_opt {
         let row = sqlx::query_as::<_, (String, String)>(
-            "SELECT access_type, allowed_models FROM gateway_keys WHERE id = ?"
+            "SELECT access_type, allowed_models FROM gateway_keys WHERE id = $1"
         )
         .bind(kid)
         .fetch_optional(&state.db)

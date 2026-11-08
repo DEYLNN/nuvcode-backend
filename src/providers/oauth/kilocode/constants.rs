@@ -20,6 +20,15 @@ pub const STREAM_STALL_TIMEOUT_SECS: u64 = 120;
 pub const COLOR: &str = "#FF6B35";
 pub const ICON_NAME: &str = "kc.png";
 
+/// Seed models for Kilo Code.
+///
+/// Deliberately one entry, not a catalogue. `list_models()` already merges whatever the
+/// operator adds in `custom_models` (admin UI → DB), so anything beyond this seed is
+/// data, not code — adding a model should not need a rebuild.
+///
+/// This one is the seed because it is the model this gateway was built against: the
+/// default free tier with the largest context, and the one that is always worth having
+/// even on a fresh install with an empty database.
 pub const MODELS: &[ModelDef] = &[
-    ModelDef { id: "stepfun-step-3-7-flash-free", backend_model: "stepfun/step-3.7-flash:free", max_tokens: None, context_length: 256000 },
+    ModelDef { id: "nemotron-3.5-super-vl:free", backend_model: "nvidia/nemotron-3.5-super-vl:free", max_tokens: None, context_length: 1000000 },
 ];

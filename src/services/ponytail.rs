@@ -2,7 +2,7 @@
 // Port of 9router open-sse/rtk/ponytail.js + ponytailPrompt.js
 // Appends to existing system message (same pattern as caveman)
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use crate::types::chat::Message;
 
 fn build_prompt(level: &str) -> String {
@@ -22,7 +22,7 @@ fn build_prompt(level: &str) -> String {
     format!("{} {} {} {} {} {} {}", persona, mode_desc, ladder, rules, output, not_lazy, persistence)
 }
 
-pub async fn inject(db: &SqlitePool, messages: &mut Vec<Message>) {
+pub async fn inject(db: &PgPool, messages: &mut Vec<Message>) {
     let level: String = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'ponytail_enabled'")
         .fetch_one(db)
         .await

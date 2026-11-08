@@ -1,4 +1,4 @@
-use sqlx::sqlite::SqlitePool;
+use sqlx::postgres::PgPool;
 use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
@@ -15,7 +15,7 @@ pub type UsageBroadcast = broadcast::Sender<UsageEvent>;
 
 pub struct AppState {
     pub config: AppConfig,
-    pub db: SqlitePool,
+    pub db: PgPool,
     pub provider_manager: Arc<RwLock<ProviderManager>>,
     pub usage_tracker: Arc<UsageTracker>,
     /// Sender side of the usage broadcast channel. The tracker publishes
@@ -30,7 +30,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn new(config: AppConfig, db: SqlitePool) -> anyhow::Result<Self> {
+    pub async fn new(config: AppConfig, db: PgPool) -> anyhow::Result<Self> {
         let provider_manager = Arc::new(RwLock::new(ProviderManager::new(&config, &db).await?));
         // Wire the usage broadcast BEFORE building the tracker so every
         // save() can publish to SSE subscribers without extra plumbing.

@@ -63,7 +63,7 @@ pub(crate) async fn handle_non_streaming(
                     &gateway_key_id_owned,
                     Some(&failed.key_id),
                     &endpoint,
-                    failed.error.http_status().unwrap_or(503) as i32,
+                    failed.error.http_status().unwrap_or(503) as i64,
                     &failed.error.to_string(),
                 )
                 .await;
@@ -80,7 +80,7 @@ pub(crate) async fn handle_non_streaming(
                 &gateway_key_id_owned,
                 e.provider_api_key_id(),
                 &endpoint,
-                e.http_status().unwrap_or(500) as i32,
+                e.http_status().unwrap_or(500) as i64,
                 &e.to_string(),
             )
             .await;

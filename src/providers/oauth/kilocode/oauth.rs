@@ -33,10 +33,10 @@ pub async fn start() -> Result<Value, String> {
 
     Ok(serde_json::json!({
         "device_code": data["code"],
-        "user_code": data["code"],
+        "user_code": data["user_code"],
         "verification_uri": data["verificationUrl"],
         "verification_uri_complete": data["verificationUrl"],
-        "expires_in": data["expiresIn"].as_i64().unwrap_or(300),
+        "expires_in": data["expiresIn"].as_i64().unwrap_or(599),
         "interval": 3,
     }))
 }
@@ -117,7 +117,7 @@ pub async fn save_token(state: &Arc<AppState>, data: &Value) -> Result<(), Strin
     let kv_str = serde_json::to_string(&kv).map_err(|e| format!("KiloCode serialize: {e}"))?;
 
     sqlx::query(
-        "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type, created_at, updated_at) VALUES (?, 'kc', ?, ?, 1, 'oauth', ?, ?)",
+        "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type, created_at, updated_at) VALUES ($1, 'kc', $2, $3, true, 'oauth', $4, $5)",
     )
     .bind(&kid)
     .bind(&kv_str)

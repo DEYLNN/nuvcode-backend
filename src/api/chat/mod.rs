@@ -87,21 +87,22 @@ async fn chat_completions(
     // `raw_prefix` may be the DB provider id (`fb`, `ocf`) or the UI model
     // prefix (e.g. `nx` for a custom provider with prefix != id). Resolve via
     // the active provider map's `model_prefix` lookup so both forms work.
-    let pm = state.provider_manager.read().await;
-    let provider_id = match pm.resolve_provider_id(raw_prefix) {
-        Some(id) => id,
-        None => {
-            drop(pm);
-            return Err(GatewayError::ProviderNotFound(raw_prefix.to_string()));
-        }
-    };
-    let provider = match pm.get(&provider_id) {
-        Some(p) => p,
-        None => {
-            drop(pm);
-            return Err(GatewayError::ProviderNotFound(provider_id.clone()));
-        }
-    };
+    let (provider_id, provider) = {
+        let pm = state.provider_manager.read().await;
+        let provider_id = match pm.resolve_provider_id(raw_prefix) {
+            Some(id) => id,
+            None => {
+                return Err(GatewayError::ProviderNotFound(raw_prefix.to_string()));
+            }
+        };
+        let provider = match pm.get(&provider_id) {
+            Some(p) => p,
+            None => {
+                return Err(GatewayError::ProviderNotFound(provider_id.clone()));
+            }
+        };
+        (provider_id, provider)
+    }; // read lock released here — Arc clone holds provider alive
 
     let mut all_models = provider.list_models().await.map_err(|_| GatewayError::Internal("Failed to list models".into()))?;
     // Merge user-added custom models so they pass the model check —
@@ -122,7 +123,6 @@ async fn chat_completions(
     // row id as the leading segment.
     let model_suffix = model_name.to_string();
     if !all_models.iter().any(|m| m.id == model || m.id.ends_with(&format!("/{}", model_suffix))) {
-        drop(pm);
         return Err(GatewayError::ModelNotFound {
             provider: provider_id.to_string(), model: model_name.to_string(),
         });
@@ -149,8 +149,8 @@ async fn chat_completions(
     // ── Route to handler ──
 
     if is_streaming {
-        streaming::handle_streaming(&state, &gw_key, provider, &provider_id, &model, &provider_request, start).await
+        streaming::handle_streaming(&state, &gw_key, provider.as_ref(), &provider_id, &model, &provider_request, start).await
     } else {
-        non_streaming::handle_non_streaming(&state, &gw_key, provider, &provider_id, &model, &provider_request, start).await
+        non_streaming::handle_non_streaming(&state, &gw_key, provider.as_ref(), &provider_id, &model, &provider_request, start).await
     }
 }

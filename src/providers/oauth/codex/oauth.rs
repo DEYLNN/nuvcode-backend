@@ -163,7 +163,7 @@ pub async fn save_token(state: &Arc<AppState>, token: &serde_json::Value) -> Res
     let label = extract_email_from_id_token(token)
         .unwrap_or_else(|| format!("codex-{}", &kid[4..12]));
 
-    sqlx::query("INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type, created_at, updated_at) VALUES (?, 'cx', ?, ?, 1, 'oauth', ?, ?)")
+    sqlx::query("INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type, created_at, updated_at) VALUES ($1, 'cx', $2, $3, true, 'oauth', $4, $5)")
         .bind(&kid).bind(&kv).bind(&label).bind(&now).bind(&now)
         .execute(&state.db).await.map_err(|e| format!("Codex DB: {e}"))?;
 

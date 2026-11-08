@@ -1,4 +1,4 @@
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db;
 use crate::error::GatewayError;
@@ -37,7 +37,7 @@ pub async fn check_model_access(
 /// `services::usage_tracking::UsageTracker::save` directly.
 #[allow(dead_code)]
 pub async fn track_gateway_usage(
-    db: &SqlitePool,
+    db: &PgPool,
     gateway_key_id: &str,
     provider_id: &str,
     model_id: &str,
@@ -70,11 +70,11 @@ pub async fn track_gateway_usage(
 /// Layer 2: Check if gateway key has exceeded its max_tokens limit.
 /// max_tokens=0 means unlimited. Single JOIN query.
 pub async fn check_token_limit(
-    db: &SqlitePool,
+    db: &PgPool,
     gateway_key_id: &str,
 ) -> Result<(), GatewayError> {
     let row: Option<(i64, i64)> = sqlx::query_as(
-        "SELECT gk.max_tokens, COALESCE(SUM(u.total_tokens), 0) FROM gateway_keys gk LEFT JOIN usage u ON u.gateway_key_id = gk.id WHERE gk.id = ? GROUP BY gk.id"
+        "SELECT gk.max_tokens, COALESCE(SUM(u.total_tokens), 0) FROM gateway_keys gk LEFT JOIN usage u ON u.gateway_key_id = gk.id WHERE gk.id = $1 GROUP BY gk.id"
     )
     .bind(gateway_key_id)
     .fetch_optional(db)

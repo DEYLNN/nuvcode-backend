@@ -17,11 +17,8 @@ pub fn admin_routes(state: Arc<AppState>) -> Router {
         .merge(usage_routes(state.clone()))
         .merge(combos_routes(state.clone()))
         .merge(quota_routes(state.clone()))
-        .merge(sources_routes(state.clone()))
         .merge(routes::unsloth::unsloth_routes(state.clone()))
-        .merge(proxies_routes(state))
 }
-
 use axum::routing::{get, post, patch, delete};
 
 fn providers_routes(state: Arc<AppState>) -> Router {
@@ -118,25 +115,6 @@ fn quota_routes(state: Arc<AppState>) -> Router {
         .route("/admin/api/quota/keys", get(routes::quota::api_oauth_keys))
         .route("/admin/api/quota/:key_id", get(routes::quota::api_usage_quota))
         .route("/admin/api/quota/refresh/:key_id", post(routes::quota::api_refresh_token))
-        .with_state(state)
-}
-
-fn sources_routes(state: Arc<AppState>) -> Router {
-    Router::new()
-        .route("/admin/api/sources", get(routes::sources::api_list_sources))
-        .with_state(state)
-}
-
-fn proxies_routes(state: Arc<AppState>) -> Router {
-    Router::new()
-        .route("/admin/api/proxies", get(routes::proxies::api_list_proxies))
-        .route("/admin/api/proxies", post(routes::proxies::api_create_proxy))
-        .route("/admin/api/proxies/:id", patch(routes::proxies::api_update_proxy))
-        .route("/admin/api/proxies/:id", delete(routes::proxies::api_delete_proxy))
-        .route("/admin/api/proxies/:id/toggle", post(routes::proxies::api_toggle_proxy))
-        .route("/admin/api/proxies/model/:model_id", get(routes::proxies::api_get_model_proxy))
-        .route("/admin/api/proxies/model", post(routes::proxies::api_assign_model_proxy))
-        .route("/admin/api/proxies/model/:model_id", delete(routes::proxies::api_unassign_model_proxy))
         .with_state(state)
 }
 

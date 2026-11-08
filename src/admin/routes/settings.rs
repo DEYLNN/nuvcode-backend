@@ -17,15 +17,12 @@ pub struct ApiSettingsResponse {
     pub api_key_header: String,
     pub api_key_prefix: String,
     pub database_url: String,
-    pub proxy_count: i64,
     pub keys_count: i64,
     pub in_flight: i64,
 }
 
 pub async fn api_settings(State(state): State<Arc<AppState>>) -> Json<ApiSettingsResponse> {
     let keys_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
-        .fetch_one(&state.db).await.unwrap_or(0);
-    let proxy_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM proxies")
         .fetch_one(&state.db).await.unwrap_or(0);
     let cfg = &state.config;
 
@@ -49,7 +46,6 @@ pub async fn api_settings(State(state): State<Arc<AppState>>) -> Json<ApiSetting
         api_key_header: cfg.auth.api_key_header.clone(),
         api_key_prefix: cfg.auth.api_key_prefix.clone(),
         database_url: cfg.database.url.clone(),
-        proxy_count,
         keys_count,
         in_flight: state.in_flight.load(std::sync::atomic::Ordering::Relaxed),
     })
@@ -67,7 +63,7 @@ pub async fn api_toggle_setting(
 ) -> Json<serde_json::Value> {
     // Simpan ke DB — upsert
     let result = sqlx::query(
-        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+        "INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
          ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at"
     )
     .bind(&req.key)

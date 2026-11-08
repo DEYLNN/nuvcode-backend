@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::db::models::ApiKey;
 use crate::error::GatewayError;
@@ -93,7 +93,7 @@ pub struct KeyManager {
     /// Provider ID for display.
     provider_id: String,
     /// DB pool for persisting lock state across restarts.
-    db_pool: Option<SqlitePool>,
+    db_pool: Option<PgPool>,
 }
 
 impl KeyManager {
@@ -101,7 +101,7 @@ impl KeyManager {
         Self::new_with_pool(keys, provider_id, None)
     }
 
-    pub fn new_with_pool(keys: Vec<ApiKey>, provider_id: &str, pool: Option<SqlitePool>) -> Self {
+    pub fn new_with_pool(keys: Vec<ApiKey>, provider_id: &str, pool: Option<PgPool>) -> Self {
         let states: Vec<KeyState> = keys
             .into_iter()
             .map(|key| KeyState {
@@ -230,11 +230,11 @@ impl KeyManager {
             tokio::spawn(async move {
                 let _ = sqlx::query(
                     "UPDATE api_keys SET locked_until = NULL, last_error_status = NULL, \
-                     last_error_message = NULL, last_error_at = ?, \
-                     backoff_level = 0 WHERE id = ?"
+                     last_error_message = NULL, last_error_at = $2, \
+                     backoff_level = 0 WHERE id = $1"
                 )
-                .bind(&now_iso)
                 .bind(&kid)
+                .bind(&now_iso)
                 .execute(&pool)
                 .await;
             });
@@ -315,7 +315,7 @@ impl KeyManager {
             }
             if deactivate {
                 if let Some(ks) = states.iter_mut().find(|s| s.key.id == key_id) {
-                    ks.key.is_active = 0;
+                    ks.key.is_active = false;
                 }
             }
             deactivate
@@ -350,11 +350,11 @@ impl KeyManager {
             let will_deactivate = auto_deactivated;
             tokio::spawn(async move {
                 let _ = sqlx::query(
-                    "UPDATE api_keys SET locked_until = ?, last_error_status = ?, \
-                     last_error_message = ?, last_error_at = ?, \
-                     backoff_level = ?, consecutive_error_count = CASE WHEN ? THEN consecutive_error_count + 1 ELSE consecutive_error_count END, \
-                     is_active = CASE WHEN ? THEN 0 ELSE is_active END \
-                     WHERE id = ?"
+                    "UPDATE api_keys SET locked_until = $1, last_error_status = $2, \
+                     last_error_message = $3, last_error_at = $4, \
+                     backoff_level = $5, consecutive_error_count = CASE WHEN $6 THEN consecutive_error_count + 1 ELSE consecutive_error_count END, \
+                     is_active = CASE WHEN $7 THEN false ELSE is_active END \
+                     WHERE id = $8"
                 )
                 .bind(&lock_until)
                 .bind(st)
@@ -392,7 +392,7 @@ impl KeyManager {
         let mut states = self.states.lock().unwrap();
         let ks = states.iter_mut().find(|s| s.key.id == key_id)
             .ok_or_else(|| GatewayError::ProviderError(format!("Key not found: {}", key_id)))?;
-        ks.key.is_active = if active { 1 } else { 0 };
+        ks.key.is_active = active;
         if active {
             // Reset error state on manual re-enable.
             ks.consecutive_error_count = 0;

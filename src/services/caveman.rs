@@ -2,7 +2,7 @@
 // Port of 9router open-sse/rtk/caveman.js
 // Append to existing system message (not insert new) to avoid conflict with Hermes prompt
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use crate::types::chat::Message;
 
 const PROMPTS: [(&str, &str); 3] = [
@@ -43,7 +43,7 @@ const PROMPTS: [(&str, &str); 3] = [
     )),
 ];
 
-pub async fn inject(db: &SqlitePool, messages: &mut Vec<Message>) {
+pub async fn inject(db: &PgPool, messages: &mut Vec<Message>) {
     let level: String = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'caveman_enabled'")
         .fetch_one(db)
         .await

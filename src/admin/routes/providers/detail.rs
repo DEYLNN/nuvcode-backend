@@ -28,7 +28,7 @@ pub async fn api_provider_detail(
         let mut models: Vec<serde_json::Value> = match p.list_models().await {
             Ok(list) => {
                 let blocked: std::collections::HashSet<String> = sqlx::query_scalar(
-                    "SELECT model_id FROM blocked_models WHERE provider_id = ?",
+                    "SELECT model_id FROM blocked_models WHERE provider_id = $1",
                 )
                 .bind(&provider_id)
                 .fetch_all(&state.db)
@@ -82,7 +82,7 @@ pub async fn api_provider_detail(
         }
 
         let keys: Vec<serde_json::Value> = sqlx::query_as::<_, (String, String, Option<String>, String, bool)>(
-            "SELECT id, key_value, label, key_type, is_active FROM api_keys WHERE provider_id = ? ORDER BY created_at DESC",
+            "SELECT id, key_value, label, key_type, is_active FROM api_keys WHERE provider_id = $1 ORDER BY created_at DESC",
         )
         .bind(&provider_id)
         .fetch_all(&state.db)

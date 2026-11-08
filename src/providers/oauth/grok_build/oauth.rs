@@ -144,7 +144,7 @@ pub async fn save_token(state: &Arc<AppState>, data: &Value) -> Result<(), Strin
     let kv_str = serde_json::to_string(&kv).map_err(|e| format!("GrokBuild serialize: {e}"))?;
 
     sqlx::query(
-        "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type, created_at, updated_at) VALUES (?, 'gb', ?, ?, 1, 'oauth', ?, ?)",
+        "INSERT INTO api_keys (id, provider_id, key_value, label, is_active, key_type, created_at, updated_at) VALUES ($1, 'gb', $2, $3, true, 'oauth', $4, $5)",
     )
     .bind(&kid)
     .bind(&kv_str)

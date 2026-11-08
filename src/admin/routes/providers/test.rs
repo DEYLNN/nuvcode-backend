@@ -141,7 +141,7 @@ pub async fn api_test_model(
                     "__test__",
                     Some(&failed.key_id),
                     "/admin/api/providers/:id/test",
-                    failed.error.http_status().unwrap_or(503) as i32,
+                    failed.error.http_status().unwrap_or(503) as i64,
                     &failed.error.to_string(),
                 ).await;
             }
@@ -160,7 +160,7 @@ pub async fn api_test_model(
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as i64;
-            let err_status = e.http_status().unwrap_or(502) as i32;
+            let err_status = e.http_status().unwrap_or(502) as i64;
 
             // Track test failure in usage logs
             crate::services::usage_tracking::record_error(

@@ -29,7 +29,7 @@ pub struct FillFirst;
 impl KeyStrategy for FillFirst {
     fn select<'a>(&self, ctx: &StrategyCtx<'a>) -> Option<&'a KeyState> {
         ctx.keys.iter().find(|k| {
-            if !k.key.is_active() { return false; }       // skip deactivated
+            if !k.key.is_active { return false; }       // skip deactivated
             if ctx.exclude_ids.contains(&k.key.id) {
                 return false;
             }
@@ -68,7 +68,7 @@ impl KeyStrategy for RoundRobin {
     fn select<'a>(&self, ctx: &StrategyCtx<'a>) -> Option<&'a KeyState> {
         // Filter available: not excluded, not locked, not model-locked
         let available: Vec<&KeyState> = ctx.keys.iter().filter(|k| {
-            if !k.key.is_active() { return false; }       // skip deactivated
+            if !k.key.is_active { return false; }       // skip deactivated
             if ctx.exclude_ids.contains(&k.key.id) {
                 return false;
             }

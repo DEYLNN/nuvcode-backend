@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::config::models::AppConfig;
 use crate::providers::registry::ProviderRegistry;
@@ -14,13 +14,13 @@ use crate::providers::spec::ProviderQuirks;
 /// Runtime manager — stores ALL registered providers from registry.
 /// Keys are loaded from DB but providers are always available (even with 0 keys).
 pub struct ProviderManager {
-    active: HashMap<String, Box<dyn Provider>>,
+    active: HashMap<String, Arc<dyn Provider>>,
     registry: ProviderRegistry,
-    db: SqlitePool,
+    db: PgPool,
 }
 
 impl ProviderManager {
-    pub async fn new(_config: &AppConfig, db: &SqlitePool) -> anyhow::Result<Self> {
+    pub async fn new(_config: &AppConfig, db: &PgPool) -> anyhow::Result<Self> {
         let registry = ProviderRegistry::new();
         let mut active = HashMap::new();
 
@@ -78,16 +78,16 @@ impl ProviderManager {
 
                 let provider = crate::engine::openai_compat::provider::OpenAICompatibleProvider::new(config, keys, Some(db.clone()));
                 tracing::info!("Custom provider '{}' loaded with {} key(s)", cp.id, key_count);
-                active.insert(cp.id.clone(), Box::new(provider));
+                active.insert(cp.id.clone(), Arc::new(provider) as Arc<dyn Provider>);
             }
         }
 
         Ok(Self { active, registry, db: db.clone() })
     }
 
-    /// Look up provider by name
-    pub fn get(&self, name: &str) -> Option<&dyn Provider> {
-        self.active.get(name).map(|p| p.as_ref())
+    /// Look up provider by name. Returns Arc clone — caller can release read lock immediately.
+    pub fn get(&self, name: &str) -> Option<Arc<dyn Provider>> {
+        self.active.get(name).cloned()
     }
 
     /// Resolve a model-id prefix to the underlying provider id.
@@ -159,7 +159,7 @@ impl ProviderManager {
     }
 
     /// Rebuild a custom (DB-defined) provider from scratch
-    pub async fn reload_custom_provider(&mut self, id: &str, db: &SqlitePool) -> anyhow::Result<()> {
+    pub async fn reload_custom_provider(&mut self, id: &str, db: &PgPool) -> anyhow::Result<()> {
         let cp = match crate::db::get_custom_provider(db, id).await? {
             Some(p) => p,
             None => { self.active.remove(id); return Ok(()); }
@@ -187,7 +187,7 @@ impl ProviderManager {
         };
         let keys = crate::db::load_provider_keys(db, id).await?;
         let provider = crate::engine::openai_compat::provider::OpenAICompatibleProvider::new(config, keys, Some(db.clone()));
-        self.active.insert(id.to_string(), Box::new(provider));
+        self.active.insert(id.to_string(), Arc::new(provider) as Arc<dyn Provider>);
         Ok(())
     }
 
@@ -226,7 +226,7 @@ impl ProviderManager {
         // Inject active combos as virtual models (combo/<name>)
         // ctx = min(ctx tiers) for fallback/round_robin, max(ctx tiers) for balanced.
         let combos = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT name, tiers, strategy FROM combos WHERE is_active = 1"
+            "SELECT name, tiers, strategy FROM combos WHERE is_active = true"
         )
         .fetch_all(&self.db)
         .await
@@ -273,7 +273,7 @@ impl ProviderManager {
 
         // Inject active combos as virtual models (combo/<name>)
         let combos = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT name, tiers, strategy FROM combos WHERE is_active = 1"
+            "SELECT name, tiers, strategy FROM combos WHERE is_active = true"
         )
         .fetch_all(&self.db)
         .await
