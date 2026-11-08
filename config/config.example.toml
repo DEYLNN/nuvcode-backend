@@ -1,12 +1,12 @@
-# AxumRouter Backend — Example Config
+# NuvCode Backend — Example Config
 # Copy to config/config.toml and fill in your values.
-# All values can be overridden via env vars with AXUM_ prefix.
-# Example: AXUM_DATABASE__URL=sqlite:data/prod.db?mode=rwc
+# All values can be overridden via env vars with NUV_ prefix.
+# Example: NUV_DATABASE__URL=postgresql://user:pass@localhost/nuvcode
 
 [server]
 host = "0.0.0.0"
-port = 3000
-# public_url = "http://your-vps-ip:3000"   # Optional: override auto-detected URL
+port = 7444
+# public_url = "http://your-vps-ip:7444"   # Optional: override auto-detected URL
 
 [gateway]
 timeout_secs = 120
@@ -14,8 +14,9 @@ timeout_secs = 120
 [auth]
 api_key_header = "Authorization"
 api_key_prefix = "Bearer "
-# admin_password = "your-admin-password"   # Set untuk enable admin login
-# jwt_secret = "your-jwt-secret-change-me" # Optional, fallback ke default dev
+# admin_username = "admin"                  # Set to enable admin login
+# admin_password = "your-admin-password"    # Required when admin_username is set
+# jwt_secret = "your-jwt-secret-change-me"  # Optional, falls back to a dev default
 
 [database]
-url = "sqlite:data/axumrouter.db?mode=rwc"
+url = "postgresql://nuvcode:***@localhost/nuvcode"
