@@ -19,11 +19,8 @@ struct ComboConfig {
 }
 
 async fn fetch_combo(db: &sqlx::PgPool, combo_name: &str) -> Result<ComboConfig, GatewayError> {
-    // combos.is_active is an INTEGER column (0/1) in Postgres — cast to BIGINT
-    // so sqlx can decode it into i64. Without the cast the whole row fails to
-    // decode and the request returns 500 "DB error".
-    let row = sqlx::query_as::<_, (String, String, i64, i64)>(
-        "SELECT tiers, strategy, is_active::bigint, min_context FROM combos WHERE name = $1 OR id = $2"
+    let row = sqlx::query_as::<_, (String, String, bool, i64)>(
+        "SELECT tiers, strategy, is_active, min_context FROM combos WHERE name = $1 OR id = $2"
     )
     .bind(combo_name)
     .bind(combo_name)
@@ -40,8 +37,8 @@ async fn fetch_combo(db: &sqlx::PgPool, combo_name: &str) -> Result<ComboConfig,
         "COMBO FETCH: name={} strategy={} is_active={} min_context={}",
         combo_name, strategy, is_active, min_context
     );
-    if is_active == 0 {
-        tracing::warn!("COMBO FETCH: combo is_active=0, rejecting: {}", combo_name);
+    if !is_active {
+        tracing::warn!("COMBO FETCH: combo is_active=false, rejecting: {}", combo_name);
         return Err(GatewayError::ModelNotFound {
             provider: "combo".to_string(),
             model: combo_name.to_string(),

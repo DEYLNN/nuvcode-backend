@@ -11,7 +11,7 @@ use crate::error::GatewayError;
 use crate::services::key_strategy::{strategy_from_config, KeyStrategy, StrategyCtx};
 
 /// Number of consecutive retryable errors before a key is auto-deactivated
-/// (set is_active=0). Reset to 0 on mark_success. Admin can re-enable via FE toggle.
+/// (set is_active=false). Reset to 0 on mark_success. Admin can re-enable via FE toggle.
 pub const AUTO_DEACTIVATE_THRESHOLD: i64 = 3;
 
 /// Runtime state for each key — extends the DB `ApiKey` with in-memory tracking.

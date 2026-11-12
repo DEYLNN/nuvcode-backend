@@ -214,7 +214,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
             name TEXT UNIQUE NOT NULL,
             strategy TEXT NOT NULL DEFAULT 'fallback',
             tiers TEXT NOT NULL DEFAULT '[]',
-            is_active INTEGER NOT NULL DEFAULT 1,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
             min_context BIGINT NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS'),
             updated_at TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS')
@@ -236,7 +236,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
             context_length BIGINT NOT NULL DEFAULT 128000,
             supports_tools BIGINT NOT NULL DEFAULT 0,
             supports_vision BIGINT NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS'),
             updated_at TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS')
         )

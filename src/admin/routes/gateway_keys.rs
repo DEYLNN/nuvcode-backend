@@ -13,10 +13,8 @@ pub struct GatewayKeyJson {
     pub id: String,
     pub key_value: String,
     pub label: Option<String>,
-    /// `is_active` is a BOOLEAN column in Postgres. Stored as `i64` here (0/1)
-    /// because the frontend expects a number, not a JSON boolean — the FE's
-    /// `GatewayKeyJson` interface declares `is_active: number`.
-    pub is_active: i64,
+    /// `is_active` is a BOOLEAN column in Postgres, stored as bool.
+    pub is_active: bool,
     pub access_type: String,
     pub allowed_models: Vec<String>,
     pub max_tokens: i64,
@@ -37,7 +35,7 @@ pub async fn api_list_keys(State(state): State<Arc<AppState>>) -> Json<Vec<Gatew
         } else {
             serde_json::from_str(&allowed_models_str).unwrap_or_default()
         };
-        GatewayKeyJson { id, key_value, label, is_active: is_active as i64, access_type, allowed_models, max_tokens, created_at }
+        GatewayKeyJson { id, key_value, label, is_active, access_type, allowed_models, max_tokens, created_at }
     })
     .collect();
     Json(rows)
@@ -126,7 +124,7 @@ pub async fn api_update_key(
     }
     if let Some(is_active) = req.is_active {
         let _ = sqlx::query("UPDATE gateway_keys SET is_active = $1 WHERE id = $2")
-            .bind(is_active as i64).bind(&id).execute(&state.db).await;
+            .bind(is_active).bind(&id).execute(&state.db).await;
     }
     if let Some(access_type) = &req.access_type {
         let _ = sqlx::query("UPDATE gateway_keys SET access_type = $1 WHERE id = $2")

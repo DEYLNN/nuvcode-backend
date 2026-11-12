@@ -39,34 +39,25 @@ impl UsageTracker {
         self
     }
 
-    /// Save a usage entry.
-    ///
-    /// Tracking must never slow the response, so the write is **spawned** rather than
-    /// awaited by the caller: the request returns to the client while the row is being
-    /// inserted in the background. The row is built from the entry itself — there is no
-    /// `SELECT` back afterwards, so one request costs one INSERT instead of an INSERT
-    /// plus a read.
-    ///
-    /// Tracking must also never break the upstream call, so a DB error is logged and
-    /// dropped rather than propagated.
+    /// Save a usage entry. Tracking must never break the upstream API call,
+    /// so any DB error is logged & swallowed here rather than propagated.
+    /// After successful insert, publishes to broadcast channel (best-effort).
     pub async fn save(&self, entry: UsageEntry) {
         let pool = self.pool.clone();
-        let broadcast = self.broadcast.clone();
-        tokio::spawn(async move {
-            // Build the broadcast payload from the entry we just wrote, so the SSE
-            // subscribers see the same row without re-reading the database.
-            let row = db::usage_row_from_entry(&entry);
-            db::save_request_usage(&pool, &entry).await;
-            tracing::debug!(
-                "usage saved: {}/{} prompt={} completion={} status={}",
-                entry.provider_id, entry.model_id,
-                entry.prompt_tokens, entry.completion_tokens,
-                entry.status
-            );
-            if let Some(tx) = &broadcast {
+        db::save_request_usage(&pool, &entry).await;
+        tracing::debug!(
+            "usage saved: {}/{} prompt={} completion={} status={}",
+            entry.provider_id, entry.model_id,
+            entry.prompt_tokens, entry.completion_tokens,
+            entry.status
+        );
+
+        // Publish the most-recent row to subscribers (poll-free path).
+        if let Some(tx) = &self.broadcast {
+            if let Some(row) = db::fetch_latest_usage(&pool).await {
                 let _ = tx.send(row);
             }
-        });
+        }
     }
 }
 

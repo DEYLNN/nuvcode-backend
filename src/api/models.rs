@@ -24,7 +24,7 @@ async fn list_models(
     // the same way they request "kc/nemotron-3.5-super-vl:free".
     {
         let combo_rows: Vec<(String, i64)> = sqlx::query_as(
-            "SELECT name, min_context FROM combos WHERE is_active = 1 ORDER BY name"
+            "SELECT name, min_context FROM combos WHERE is_active = true ORDER BY name"
         )
         .fetch_all(&state.db)
         .await

@@ -22,8 +22,7 @@ pub struct ComboResponse {
     pub name: String,
     pub strategy: String,
     pub tiers: Vec<String>,
-    /// `is_active` is a BIGINT column (0/1) in Postgres. Serialized as a JSON
-    /// boolean because the FE reads it as `combo.is_active` in a boolean context.
+    /// `is_active` is a BOOLEAN column in Postgres.
     pub is_active: bool,
     pub min_context: i64,
     pub created_at: String,
@@ -34,8 +33,8 @@ pub struct ComboResponse {
 pub async fn api_list_combos(
     State(state): State<Arc<AppState>>,
 ) -> Json<Vec<ComboResponse>> {
-    let rows = sqlx::query_as::<_, (String, String, String, String, i64, i64, String, String)>(
-        "SELECT id, name, strategy, tiers, is_active::bigint, min_context, created_at, updated_at FROM combos ORDER BY created_at DESC"
+    let rows = sqlx::query_as::<_, (String, String, String, String, bool, i64, String, String)>(
+        "SELECT id, name, strategy, tiers, is_active, min_context, created_at, updated_at FROM combos ORDER BY created_at DESC"
     )
     .fetch_all(&state.db)
     .await
@@ -45,7 +44,7 @@ pub async fn api_list_combos(
         let tiers: Vec<String> = serde_json::from_str(&tiers_str).unwrap_or_default();
         ComboResponse {
             id, name, strategy, tiers,
-            is_active: active != 0, min_context: min_ctx,
+            is_active: active, min_context: min_ctx,
             created_at: created, updated_at: updated,
         }
     })
@@ -160,7 +159,7 @@ pub async fn api_toggle_combo(
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
     let _ = sqlx::query(
-        "UPDATE combos SET is_active = CASE WHEN is_active = true THEN 0 ELSE 1 END, updated_at = NOW() WHERE id = $1"
+        "UPDATE combos SET is_active = CASE WHEN is_active = true THEN false ELSE true END, updated_at = NOW() WHERE id = $1"
     )
     .bind(&id)
     .execute(&state.db)

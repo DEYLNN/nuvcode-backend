@@ -11,7 +11,7 @@ const EXCLUDED_TABLES: &[&str] = &["request_logs", "usage"];
 
 async fn fetch_all_tables(db: &PgPool) -> Vec<String> {
     sqlx::query_scalar::<_, String>(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('sqlite_sequence') ORDER BY name"
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
     )
     .fetch_all(db)
     .await
@@ -20,8 +20,9 @@ async fn fetch_all_tables(db: &PgPool) -> Vec<String> {
 
 async fn fetch_columns(db: &PgPool, table: &str) -> Vec<String> {
     sqlx::query_scalar::<_, String>(
-        &format!("SELECT name FROM pragma_table_info('{}') ORDER BY cid", table)
+        "SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position"
     )
+    .bind(table)
     .fetch_all(db)
     .await
     .unwrap_or_default()
@@ -48,13 +49,10 @@ pub async fn api_database_info(State(state): State<Arc<AppState>>) -> Json<Datab
     let cfg = &state.config;
     let url = cfg.database.url.clone();
 
-    let size_bytes: i64 = if url.starts_with("sqlite:") {
-        let stripped = url.trim_start_matches("sqlite:").split('?').next().unwrap_or(&url);
-        std::path::Path::new(stripped)
-            .metadata()
-            .map(|m| m.len() as i64)
-            .unwrap_or(0)
-    } else { 0 };
+    let size_bytes: i64 = sqlx::query_scalar("SELECT pg_database_size(current_database())")
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
     let size_mb = size_bytes as f64 / 1_048_576.0;
 
     let table_names = fetch_all_tables(&state.db).await;
@@ -179,7 +177,7 @@ pub async fn api_database_import(
             }
         }
 
-        let placeholders: String = (0..cols.len()).map(|_| "?").collect::<Vec<_>>().join(",");
+        let placeholders: String = (1..=cols.len()).map(|i| format!("${}", i)).collect::<Vec<_>>().join(",");
         let col_list = cols.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(",");
         let ins = format!("INSERT INTO \"{}\" ({}) VALUES ({})", table_name, col_list, placeholders);
 
@@ -190,7 +188,7 @@ pub async fn api_database_import(
                 let v = obj.get(col).cloned().unwrap_or(serde_json::Value::Null);
                 q = match v {
                     serde_json::Value::Null => q.bind(Option::<String>::None),
-                    serde_json::Value::Bool(b) => q.bind(b as i64),
+                    serde_json::Value::Bool(b) => q.bind(b),
                     serde_json::Value::Number(n) => {
                         if let Some(i) = n.as_i64() { q.bind(i) }
                         else if let Some(f) = n.as_f64() { q.bind(f) }

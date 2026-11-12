@@ -85,8 +85,8 @@ pub async fn api_all_models(
     // Models page can show them alongside real providers, with enable/disable
     // and context length — same toggle UX as real models.
     {
-        let combo_rows: Vec<(String, String, i64, i64)> = sqlx::query_as(
-            "SELECT id, name, min_context, is_active::bigint FROM combos ORDER BY name"
+        let combo_rows: Vec<(String, String, i64, bool)> = sqlx::query_as(
+            "SELECT id, name, min_context, is_active FROM combos ORDER BY name"
         )
         .fetch_all(&state.db)
         .await
@@ -100,7 +100,7 @@ pub async fn api_all_models(
                     "owned_by": "combo",
                     "enabled": !is_disabled,
                     "context_length": if min_ctx > 0 { Some(min_ctx as u32) } else { None },
-                    "combo_active": is_active != 0,
+                    "combo_active": is_active,
                 })
             }).collect::<Vec<_>>();
             providers_map.insert("combo".to_string(), combo_entry);
