@@ -7,6 +7,10 @@ use serde_json::Value;
 use super::auth::CbaiOAuthCredential;
 use super::constants;
 
+fn uuid_v4_simple() -> String {
+    uuid::Uuid::new_v4().simple().to_string()
+}
+
 pub struct CbaiClient {
     http: Client,
     first_chunk_timeout: std::time::Duration,
@@ -30,15 +34,41 @@ impl CbaiClient {
         builder: reqwest::RequestBuilder,
         cred: &CbaiOAuthCredential,
     ) -> reqwest::RequestBuilder {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        let req_id = format!("{:x}", now.as_nanos());
+        let conv_id = uuid_v4_simple();
+        let conv_msg_id = uuid_v4_simple();
+        let conv_req_id = uuid_v4_simple();
+
         let b = builder
             .header("Authorization", format!("Bearer {}", cred.access_token))
             .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
             .header("User-Agent", constants::USER_AGENT)
+            .header("Host", "www.codebuddy.ai")
+            .header("Origin", "https://www.codebuddy.cn")
+            .header("Referer", "https://www.codebuddy.cn/")
+            .header("X-Agent-Intent", "craft")
+            .header("X-Client-Platform", "web")
             .header("X-Product", "SaaS")
-            .header("X-IDE-Type", "IDE")
-            .header("X-IDE-Name", "IDE")
+            .header("X-Product-Version", constants::CLI_VERSION)
+            .header("X-IDE-Name", "CLI")
+            .header("X-IDE-Type", "CLI")
+            .header("X-IDE-Version", constants::CLI_VERSION)
+            .header("X-Request-ID", &req_id)
+            .header("X-Conversation-ID", &conv_id)
+            .header("X-Conversation-Message-ID", &conv_msg_id)
+            .header("X-Conversation-Request-ID", &conv_req_id)
             .header("X-Requested-With", "XMLHttpRequest")
-            .header("x-codebuddy-request", "1");
+            .header("x-stainless-arch", std::env::consts::ARCH)
+            .header("x-stainless-lang", "js")
+            .header("x-stainless-os", std::env::consts::OS)
+            .header("x-stainless-package-version", constants::CLI_VERSION)
+            .header("x-stainless-retry-count", "0")
+            .header("x-stainless-runtime", "node")
+            .header("x-stainless-runtime-version", "v22.0.0");
         b
     }
 

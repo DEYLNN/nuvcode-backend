@@ -17,6 +17,13 @@ use super::client::CbaiClient;
 use super::constants;
 use super::mapper::CbaiMapper;
 
+/// CodeBuddy is no-lock (like Kilocode), BUT a 403 "request illegal" means the
+/// account is flagged/restricted. Lock the key so we don't keep hammering a
+/// banned account. KeyManager auto-deactivates after 3 consecutive errors.
+fn should_lock_error(status: u16, msg: &str) -> bool {
+    status == 403 && msg.contains("request illegal")
+}
+
 pub struct CbaiProvider {
     metadata: ProviderMetadata,
     keys: KeyManager,
@@ -96,7 +103,6 @@ impl Provider for CbaiProvider {
                 Ok(c) => c,
                 Err(e) => {
                     let msg = e;
-                    self.keys.lock_key(&key_id, 400, msg.clone());
                     excluded.push(key_id.clone());
                     last_error = Some(msg.clone());
                     last_status = Some(400);
@@ -113,7 +119,9 @@ impl Provider for CbaiProvider {
                 Err(e) => {
                     let msg = e.to_string();
                     let st = e.http_status().unwrap_or(502);
-                    self.keys.lock_key(&key_id, st, msg.clone());
+                    if should_lock_error(st, &msg) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
                     last_error = Some(msg.clone());
                     last_status = Some(st);
                     failed.push(FailedKeyAttempt { key_id: key_id.clone(), error: e });
@@ -148,7 +156,6 @@ impl Provider for CbaiProvider {
                 Ok(c) => c,
                 Err(e) => {
                     let msg = e;
-                    self.keys.lock_key(&key_id, 400, msg.clone());
                     excluded.push(key_id.clone());
                     last_error = Some(msg.clone());
                     last_status = Some(400);
@@ -171,7 +178,9 @@ impl Provider for CbaiProvider {
                 Err(e) => {
                     let msg = e.to_string();
                     let st = e.http_status().unwrap_or(502);
-                    self.keys.lock_key(&key_id, st, msg.clone());
+                    if should_lock_error(st, &msg) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
                     last_error = Some(msg.clone());
                     last_status = Some(st);
                     last_attempted_key_id = Some(key_id.clone());

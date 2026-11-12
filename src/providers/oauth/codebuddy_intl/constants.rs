@@ -14,7 +14,8 @@ pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 200;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 360;
 pub const COLOR: &str = "#006EFF";
 pub const ICON_NAME: &str = "codebuddy.png";
-pub const USER_AGENT: &str = "IDE/2.108.1 CodeBuddy/2.108.1";
+pub const USER_AGENT: &str = "CLI/2.137.1 CodeBuddy/2.137.1";
+pub const CLI_VERSION: &str = "2.137.1";
 
 pub const MODELS: &[ModelDef] = &[
     ModelDef { id: "minimax-m3", context_length: 1000000 },
