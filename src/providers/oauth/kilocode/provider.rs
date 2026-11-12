@@ -17,6 +17,13 @@ use super::client::KlClient;
 use super::constants;
 use super::mapper::KlMapper;
 
+/// Kilocode is no-lock, BUT a 401 means the OAuth token is dead/expired.
+/// Lock the key so we don't keep hammering with an invalid token.
+/// KeyManager auto-deactivates after 3 consecutive errors.
+fn should_lock_error(status: u16) -> bool {
+    status == 401
+}
+
 pub struct KlProvider {
     metadata: ProviderMetadata,
     keys: KeyManager,
@@ -112,6 +119,9 @@ impl Provider for KlProvider {
                 Err(e) => {
                     let msg = e.to_string();
                     let st = e.http_status().unwrap_or(502);
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
                     last_error = Some(msg.clone());
                     last_status = Some(st);
                     failed.push(FailedKeyAttempt { key_id: key_id.clone(), error: e });
@@ -168,6 +178,9 @@ impl Provider for KlProvider {
                 Err(e) => {
                     let msg = e.to_string();
                     let st = e.http_status().unwrap_or(502);
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
                     last_error = Some(msg.clone());
                     last_status = Some(st);
                     last_attempted_key_id = Some(key_id.clone());
