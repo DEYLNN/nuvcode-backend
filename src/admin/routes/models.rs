@@ -86,7 +86,7 @@ pub async fn api_all_models(
     // and context length — same toggle UX as real models.
     {
         let combo_rows: Vec<(String, String, i64, i64)> = sqlx::query_as(
-            "SELECT id, name, min_context, is_active FROM combos ORDER BY name"
+            "SELECT id, name, min_context, is_active::bigint FROM combos ORDER BY name"
         )
         .fetch_all(&state.db)
         .await
