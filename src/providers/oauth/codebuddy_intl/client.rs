@@ -123,11 +123,13 @@ impl CbaiClient {
             }
             // Extract usage from SSE chunk (OpenAI-compatible: terminal chunk or inline)
             if let Some(u) = chunk.get("usage") {
-                usage = Some(crate::types::chat::Usage {
-                    prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
-                    completion_tokens: u.get("completion_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
-                    total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
-                });
+                if !u.is_null() {
+                    usage = Some(crate::types::chat::Usage {
+                        prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
+                        completion_tokens: u.get("completion_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
+                        total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
+                    });
+                }
             }
         }
         if id.is_empty() {

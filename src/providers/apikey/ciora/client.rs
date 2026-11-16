@@ -223,16 +223,18 @@ impl CraClient {
             .unwrap_or_default();
         if choices.is_empty() {
             if let Some(u) = v.get("usage") {
-                *usage = Some(Usage {
-                    prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
-                        as u32,
-                    completion_tokens: u
-                        .get("completion_tokens")
-                        .and_then(|n| n.as_u64())
-                        .unwrap_or(0) as u32,
-                    total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
-                        as u32,
-                });
+                if !u.is_null() {
+                    *usage = Some(Usage {
+                        prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
+                            as u32,
+                        completion_tokens: u
+                            .get("completion_tokens")
+                            .and_then(|n| n.as_u64())
+                            .unwrap_or(0) as u32,
+                        total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
+                            as u32,
+                    });
+                }
             }
             return None;
         }
@@ -259,16 +261,18 @@ impl CraClient {
 
         if usage.is_none() {
             if let Some(u) = v.get("usage") {
-                *usage = Some(Usage {
-                    prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
-                        as u32,
-                    completion_tokens: u
-                        .get("completion_tokens")
-                        .and_then(|n| n.as_u64())
-                        .unwrap_or(0) as u32,
-                    total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
-                        as u32,
-                });
+                if !u.is_null() {
+                    *usage = Some(Usage {
+                        prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
+                            as u32,
+                        completion_tokens: u
+                            .get("completion_tokens")
+                            .and_then(|n| n.as_u64())
+                            .unwrap_or(0) as u32,
+                        total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
+                            as u32,
+                    });
+                }
             }
         }
 
