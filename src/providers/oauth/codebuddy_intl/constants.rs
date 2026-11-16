@@ -18,8 +18,6 @@ pub const USER_AGENT: &str = "CLI/2.137.1 CodeBuddy/2.137.1";
 pub const CLI_VERSION: &str = "2.137.1";
 
 pub const MODELS: &[ModelDef] = &[
-    ModelDef { id: "minimax-m3", context_length: 1000000 },
-    ModelDef { id: "glm-5.2", context_length: 1000000 },
-    ModelDef { id: "glm-5.3", context_length: 1000000 },
-    ModelDef { id: "kimi-k3", context_length: 1000000 },
+    ModelDef { id: "hy3", context_length: 1000000 },
+    ModelDef { id: "hy4-flash-free", context_length: 1000000 },
 ];

@@ -4,6 +4,7 @@ pub mod antseed;
 pub mod bai;
 pub mod cline;
 pub mod cloudflare;
+pub mod ciora;
 pub mod fusioncode;
 pub mod hcnsec;
 pub mod inferhub;

@@ -2167,3 +2167,23 @@ name = "GLM 5.3"
 ctx = 1000000
 vision = false
 tools = true
+
+[[providers]]
+id = "nibie"
+name = "Nibie App"
+category = "apikey"
+color = "#10B981"
+icon = "nibie.svg"
+base_url = "https://router.nibie.app/v1"
+validate_url = "https://router.nibie.app/v1/models"
+api_type = "openai"
+timeout = 120
+first_chunk_timeout = 200
+stall_timeout = 360
+
+[[providers.models]]
+id = "deepseek-v4.1-flash-free"
+name = "DeepSeek V4.1 Flash Free"
+ctx = 1000000
+vision = false
+tools = true
