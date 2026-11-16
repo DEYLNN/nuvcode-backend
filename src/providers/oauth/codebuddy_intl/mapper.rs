@@ -48,9 +48,10 @@ impl CbaiMapper {
         if let Some(tool_choice) = request.tool_choice {
             body["tool_choice"] = tool_choice;
         }
-        if let Some(stream_options) = request.stream_options {
-            body["stream_options"] = stream_options;
-        }
+        // The upstream always streams (forced above), so usage only arrives when we ask
+        // for it explicitly. Without include_usage the terminal chunk carries no token
+        // counts and every request records 0/0 in the usage table.
+        body["stream_options"] = json!({"include_usage": true});
         body
     }
 }

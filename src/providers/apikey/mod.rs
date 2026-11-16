@@ -9,6 +9,7 @@ pub mod fusioncode;
 pub mod hcnsec;
 pub mod inferhub;
 pub mod nostate;
+pub mod nibie;
 pub mod sonogami;
 pub mod sophnet;
 pub mod threerouter;

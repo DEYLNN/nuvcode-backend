@@ -121,6 +121,14 @@ impl CbaiClient {
                 reasoning.push_str(delta["reasoning_content"].as_str().unwrap_or_default());
                 finish_reason = choice["finish_reason"].as_str().map(str::to_string);
             }
+            // Extract usage from SSE chunk (OpenAI-compatible: terminal chunk or inline)
+            if let Some(u) = chunk.get("usage") {
+                usage = Some(crate::types::chat::Usage {
+                    prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
+                    completion_tokens: u.get("completion_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
+                    total_tokens: u.get("total_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
+                });
+            }
         }
         if id.is_empty() {
             return Err(GatewayError::ProviderError(format!("CodeBuddy parse: expected JSON or SSE — body: {}", &text[..text.len().min(200)])));
