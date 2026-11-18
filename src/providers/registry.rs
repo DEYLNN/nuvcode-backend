@@ -64,6 +64,8 @@ impl ProviderRegistry {
         register_provider!(registry, "cl", crate::providers::apikey::cline::provider::ClProvider::new_with_keys, db);
         register_provider!(registry, "cf", crate::providers::apikey::cloudflare::provider::CfProvider::new_with_keys, db);
         register_provider!(registry, "cra", crate::providers::apikey::ciora::provider::CraProvider::new_with_keys, db);
+        register_provider!(registry, "kenc", crate::providers::apikey::kenari::provider::KenariProvider::new_with_keys, db);
+        register_provider!(registry, "or", crate::providers::apikey::openrouter::provider::OrProvider::new_with_keys, db);
         register_provider!(registry, "nibie", crate::providers::apikey::nibie::provider::NibieProvider::new_with_keys, db);
         register_provider!(registry, "infx", crate::providers::apikey::inferx::provider::IxProvider::new_with_keys, db);
         register_provider!(registry, "fsn", crate::providers::apikey::fusioncode::provider::FsnProvider::new_with_keys, db);

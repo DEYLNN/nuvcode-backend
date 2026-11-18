@@ -987,64 +987,6 @@ tools = true
 
 
 [[providers]]
-id = "or"
-name = "OpenRouter"
-category = "apikey"
-color = "#F97316"
-icon = "openrouter.png"
-base_url = "https://openrouter.ai/api"
-validate_url = "https://openrouter.ai/api/v1/models"
-api_type = "openai"
-docs_url = "https://openrouter.ai"
-api_key_url = "https://openrouter.ai/settings/keys"
-timeout = 64
-first_chunk_timeout = 120
-stall_timeout = 120
-
-[[providers.models]]
-id = "poolside/laguna-m.1:free"
-name = "Poolside Laguna M.1 (Free)"
-ctx = 262144
-vision = false
-tools = true
-
-[[providers.models]]
-id = "openai/gpt-oss-120b:free"
-name = "OpenAI GPT OSS 120B (Free)"
-ctx = 131072
-vision = false
-tools = true
-
-[[providers.models]]
-id = "nvidia/nemotron-3-super-120b-a12b:free"
-name = "NVIDIA Nemotron 3 Super (Free)"
-ctx = 1000000
-vision = false
-tools = true
-
-[[providers.models]]
-id = "minimax/minimax-m2.5:free"
-name = "MiniMax M2.5 (Free)"
-ctx = 204800
-vision = false
-tools = true
-
-[[providers.models]]
-id = "poolside/laguna-s-2.1:free"
-name = "Poolside Laguna S 2.1 (Free)"
-ctx = 262144
-vision = false
-tools = true
-
-[[providers.models]]
-id = "inclusionai/ling-3.0-flash:free"
-name = "Inclusion AI Ling 3.0 Flash (Free)"
-ctx = 262144
-vision = false
-tools = true
-
-
-[[providers]]
 id = "poll"
 name = "Pollinations"
 category = "apikey"

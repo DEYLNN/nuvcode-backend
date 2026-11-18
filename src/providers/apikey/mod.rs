@@ -19,3 +19,5 @@ pub mod kio;
 pub mod nutaraline;
 pub mod opencode;
 pub mod verboo;
+pub mod kenari;
+pub mod openrouter;

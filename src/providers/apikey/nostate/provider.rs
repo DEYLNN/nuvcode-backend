@@ -17,8 +17,12 @@ use super::client::NosClient;
 use super::constants;
 use super::mapper::NosMapper;
 
-/// Nostate provider — errors do not lock or deactivate keys. Each request
-/// tries every key at most once, then returns the last upstream error.
+/// Nostate provider — a 401 locks the offending key (dead credential); every other
+/// error tries the next key without locking. Each request tries every key at most
+/// once, then returns the last upstream error.
+fn should_lock_error(status: u16) -> bool {
+    status == 401
+}
 pub struct NosProvider {
     metadata: ProviderMetadata,
     keys: KeyManager,
@@ -113,10 +117,15 @@ impl Provider for NosProvider {
                     });
                 }
                 Err(e) => {
-                    excluded.push(key_id.clone());
-                    last_status = e.http_status();
-                    last_error = Some(e.to_string());
-                    failed.push(FailedKeyAttempt { key_id, error: e });
+                    let msg = e.to_string();
+                    let st = e.http_status().unwrap_or(502);
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
+                    last_error = Some(msg);
+                    last_status = Some(st);
+                    failed.push(FailedKeyAttempt { key_id: key_id.clone(), error: e });
+                    excluded.push(key_id);
                     continue;
                 }
             }
@@ -181,10 +190,15 @@ impl Provider for NosProvider {
                     });
                 }
                 Err(e) => {
-                    excluded.push(key_id.clone());
-                    last_status = e.http_status();
-                    last_error = Some(e.to_string());
-                    failed.push(FailedKeyAttempt { key_id, error: e });
+                    let msg = e.to_string();
+                    let st = e.http_status().unwrap_or(502);
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
+                    last_error = Some(msg);
+                    last_status = Some(st);
+                    failed.push(FailedKeyAttempt { key_id: key_id.clone(), error: e });
+                    excluded.push(key_id);
                     continue;
                 }
             }
