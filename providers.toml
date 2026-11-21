@@ -2109,3 +2109,25 @@ name = "GLM 5.3"
 ctx = 1000000
 vision = false
 tools = true
+
+[[providers]]
+id = "exa"
+name = "Exaone"
+category = "apikey"
+color = "#0066FF"
+icon = "exa.png"
+base_url = "https://api.exaone.ai"
+validate_url = "https://api.exaone.ai/v1/models"
+api_type = "openai"
+docs_url = "https://api.exaone.ai"
+api_key_url = "https://api.exaone.ai"
+timeout = 120
+first_chunk_timeout = 200
+stall_timeout = 360
+
+[[providers.models]]
+id = "k-exaone_v2.5"
+name = "Exaone 2.5"
+ctx = 512000
+vision = false
+tools = true

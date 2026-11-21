@@ -7,6 +7,7 @@ mod gb;
 mod kc;
 mod cbai;
 mod cx;
+mod cc;
 
 pub fn routes(state: Arc<AppState>) -> Router {
     Router::new()
@@ -25,5 +26,9 @@ pub fn routes(state: Arc<AppState>) -> Router {
         .route("/admin/api/oauth/cx/callback", get(cx::exchange))
         .route("/admin/api/oauth/cx/exchange", post(cx::manual))
         .route("/admin/api/oauth/cx/manual", post(cx::manual))
+        // Command Code OAuth — browser hand-off
+        .route("/admin/api/oauth/cc/start", get(cc::start))
+        .route("/admin/api/oauth/cc/callback", post(cc::callback))
+        .route("/admin/api/oauth/cc/manual", post(cc::manual))
         .with_state(state)
 }
