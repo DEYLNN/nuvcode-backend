@@ -86,6 +86,7 @@ impl ProviderRegistry {
         register_provider!(registry, "three", crate::providers::apikey::threerouter::provider::ThreeProvider::new_with_keys, db);
         register_provider!(registry, "ocf", crate::providers::apikey::opencode::provider::OcfProvider::new_with_keys, db);
         register_provider!(registry, "uns", crate::providers::manual::unsloth::provider::UnslothProvider::new_with_keys, db);
+        register_provider!(registry, "pkt", crate::providers::apikey::packet::provider::PktProvider::new_with_keys, db);
 
         registry
     }

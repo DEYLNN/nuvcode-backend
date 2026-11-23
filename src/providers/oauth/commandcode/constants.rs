@@ -24,7 +24,7 @@ pub const STREAM_FIRST_CHUNK_TIMEOUT_SECS: u64 = 200;
 pub const STREAM_STALL_TIMEOUT_SECS: u64 = 360;
 
 pub const COLOR: &str = "#0066FF";
-pub const ICON_NAME: &str = "cc.svg";
+pub const ICON_NAME: &str = "cc.png";
 
 pub const USER_AGENT: &str = "cli";
 pub const CLI_VERSION: &str = "1.87.1";

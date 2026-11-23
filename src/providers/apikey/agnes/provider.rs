@@ -17,8 +17,12 @@ use super::client::AgsClient;
 use super::constants;
 use super::mapper::AgsMapper;
 
-/// Agnes AI provider — errors do not lock or deactivate keys. Each request
-/// tries every key at most once, then returns the last upstream error.
+/// Agnes AI provider — locks keys on 401/403 (dead/invalid credentials).
+/// Other errors (429, 5xx) do not lock — key stays available for retry.
+fn should_lock_error(status: u16) -> bool {
+    status == 401 || status == 403
+}
+
 pub struct AgsProvider {
     metadata: ProviderMetadata,
     keys: KeyManager,
@@ -113,9 +117,14 @@ impl Provider for AgsProvider {
                     });
                 }
                 Err(e) => {
+                    let st = e.http_status().unwrap_or(502);
+                    let msg = e.to_string();
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
                     excluded.push(key_id.clone());
-                    last_status = e.http_status();
-                    last_error = Some(e.to_string());
+                    last_status = Some(st);
+                    last_error = Some(msg);
                     failed.push(FailedKeyAttempt { key_id, error: e });
                     continue;
                 }
@@ -181,9 +190,14 @@ impl Provider for AgsProvider {
                     });
                 }
                 Err(e) => {
+                    let st = e.http_status().unwrap_or(502);
+                    let msg = e.to_string();
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, msg.clone());
+                    }
                     excluded.push(key_id.clone());
-                    last_status = e.http_status();
-                    last_error = Some(e.to_string());
+                    last_status = Some(st);
+                    last_error = Some(msg);
                     failed.push(FailedKeyAttempt { key_id, error: e });
                     continue;
                 }

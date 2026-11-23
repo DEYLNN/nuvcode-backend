@@ -21,3 +21,4 @@ pub mod opencode;
 pub mod verboo;
 pub mod kenari;
 pub mod openrouter;
+pub mod packet;
