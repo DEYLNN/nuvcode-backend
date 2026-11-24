@@ -22,3 +22,5 @@ pub mod verboo;
 pub mod kenari;
 pub mod openrouter;
 pub mod packet;
+pub mod experiential;
+pub mod bajingan;
