@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use super::auth::BjtCredential;
 use super::constants;
+use super::mapper::strip_watermark;
 
 pub struct BjtClient {
     http: Client,
@@ -78,7 +79,7 @@ impl BjtClient {
         let content = message
             .get("content")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(|s| strip_watermark(s))
             .filter(|s| !s.is_empty());
         let reasoning_content = message
             .get("reasoning_content")
@@ -243,7 +244,7 @@ impl BjtClient {
         let content = delta
             .get("content")
             .and_then(|c| c.as_str())
-            .map(|s| s.to_string())
+            .map(|s| strip_watermark(s))
             .filter(|s| !s.is_empty());
         let reasoning_content = delta
             .get("reasoning_content")
