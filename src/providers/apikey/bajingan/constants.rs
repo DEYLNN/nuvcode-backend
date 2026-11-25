@@ -16,10 +16,12 @@ pub struct ModelDef {
 }
 
 pub const MODELS: &[ModelDef] = &[
-    ModelDef {
-        id: "DeepSeek-V4.1-Flash-1017-UNCENSORED",
-        context_length: 1000000,
-    },
+    ModelDef { id: "DeepSeek-V4.1-Flash-1017-UNCENSORED", context_length: 1048576 },
+    ModelDef { id: "DeepSeek-V4-Flash-0731-UNCENSORED", context_length: 1048576 },
+    ModelDef { id: "Deepseek-v4.1-flash-UNCEN-FAST", context_length: 198000 },
+    ModelDef { id: "DeepSeek-V4.1-Flash", context_length: 1048576 },
+    ModelDef { id: "Claude-Haiku-5.5", context_length: 1000000 },
+    ModelDef { id: "ernie-5.5-flash-preview", context_length: 1024000 },
 ];
 
 pub fn provider_spec() -> crate::providers::spec::ProviderSpec {

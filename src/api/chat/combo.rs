@@ -117,7 +117,10 @@ pub(crate) async fn combo_ctx(pm: &ProviderManager, tiers: &[String], strategy: 
 /// Compute the tier index order based on strategy.
 /// - fallback: DB order, no skip. combo ctx = min(ctx tiers).
 /// - round_robin: shuffled, skip ctx < estimate. combo ctx = min(ctx tiers).
-/// - balanced: sort by ctx ascending, skip ctx < estimate. combo ctx = max(ctx tiers).
+/// - balanced: two-step — (1) keep only tiers whose ctx fits the estimate,
+///   (2) among those, the tightest fitting ctx goes first (its peers next in DB
+///   order), then the rest by ctx ascending as overflow fallbacks.
+///   combo ctx = max(ctx tiers).
 async fn compute_tier_order(
     pm: &ProviderManager,
     cfg: &ComboConfig,
@@ -130,10 +133,15 @@ async fn compute_tier_order(
         }
         v
     };
+    order_tiers(&ctxs, &cfg.strategy, estimated_tokens)
+}
 
-    let mut order: Vec<usize> = (0..cfg.tiers.len()).collect();
+/// Pure tier-ordering logic (no DB, no provider manager) so it can be unit
+/// tested. `ctxs[i]` is the context window of `tiers[i]`; 0 means unknown.
+fn order_tiers(ctxs: &[u32], strategy: &str, estimated_tokens: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..ctxs.len()).collect();
 
-    match cfg.strategy.as_str() {
+    match strategy {
         "round_robin" => {
             use rand::seq::SliceRandom;
             order.shuffle(&mut rand::thread_rng());
@@ -143,12 +151,40 @@ async fn compute_tier_order(
             }
         }
         "balanced" => {
-            // Estimate tokens, filter eligible, shuffle — don't force tier 1
-            use rand::seq::SliceRandom;
-            order.shuffle(&mut rand::thread_rng());
-            // Skip tiers where ctx is known (>0) and smaller than estimated_tokens.
+            // Step 1 — eligibility: a tier must fit the prompt. Unknown ctx (0)
+            // stays eligible: we cannot prove it does not fit.
             if estimated_tokens > 0 {
                 order.retain(|&i| ctxs[i] == 0 || ctxs[i] as usize >= estimated_tokens);
+            }
+
+            if order.is_empty() {
+                // Nothing fits. Fall back to the whole list so the request can
+                // still fail upstream with a real error instead of a bare 400.
+                order = (0..ctxs.len()).collect();
+            } else {
+                // Step 2 — pick the tightest fit that still holds the prompt:
+                // the smallest ctx >= estimate. Tiers sharing that ctx are
+                // preferred peers and keep DB order among themselves. Everything
+                // else follows by ctx ascending (small overflow risk first),
+                // with unknown-ctx tiers last.
+                let tight = order
+                    .iter()
+                    .map(|&i| ctxs[i])
+                    .filter(|&c| c >= estimated_tokens as u32)
+                    .min();
+                let tight = tight.unwrap_or(0);
+
+                let rank = |i: usize| -> (u8, u32, usize) {
+                    let c = ctxs[i];
+                    if tight > 0 && c == tight {
+                        (0, c, i) // preferred: exact ctx match, DB order
+                    } else if c == 0 {
+                        (2, u32::MAX, i) // unknown ctx last
+                    } else {
+                        (1, c, i) // other fitting ctx, smallest first
+                    }
+                };
+                order.sort_by_key(|&i| rank(i));
             }
         }
         _ => {
@@ -340,4 +376,68 @@ pub(crate) async fn handle_combo_request_stream(
         None => "All combo tiers failed: no tiers defined or all skipped".into(),
     };
     Err(GatewayError::ProviderError(err_msg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::order_tiers;
+
+    // bjt-test shape: four 1M tiers + one 198K tier.
+    const CTXS: &[u32] = &[1048576, 1048576, 1048576, 1048576, 198000];
+
+    #[test]
+    fn balanced_prefers_smallest_ctx_that_fits() {
+        // A 100K prompt fits everywhere. The tightest fit is the 198K tier,
+        // so it must be picked first instead of a random 1M tier.
+        let order = order_tiers(CTXS, "balanced", 100_000);
+        let first = order[0];
+        assert_eq!(
+            CTXS[first], 198000,
+            "expected tightest fitting ctx (198000) first, got index {first} ctx {}",
+            CTXS[first]
+        );
+    }
+
+    #[test]
+    fn balanced_drops_tiers_too_small_for_prompt() {
+        // 500K prompt cannot fit the 198K tier at all.
+        let order = order_tiers(CTXS, "balanced", 500_000);
+        for &i in &order {
+            assert!(
+                CTXS[i] == 0 || CTXS[i] as usize >= 500_000,
+                "ineligible tier kept: index {i} ctx {}",
+                CTXS[i]
+            );
+        }
+        assert_eq!(order.len(), 4, "expected the four 1M tiers only");
+    }
+
+    #[test]
+    fn balanced_keeps_all_tiers_when_nothing_fits() {
+        // Prompt larger than every ctx: keep everything so upstream returns a
+        // real context-overflow error instead of us inventing a 400.
+        let order = order_tiers(CTXS, "balanced", 5_000_000);
+        assert_eq!(order.len(), CTXS.len());
+    }
+
+    #[test]
+    fn balanced_unknown_ctx_goes_last() {
+        let ctxs = [0u32, 198_000, 1_048_576];
+        let order = order_tiers(&ctxs, "balanced", 1000);
+        assert_eq!(ctxs[order[0]], 198_000, "tightest fit must lead");
+        assert_eq!(*order.last().unwrap(), 0, "unknown ctx must be last");
+    }
+
+    #[test]
+    fn fallback_keeps_db_order() {
+        let order = order_tiers(CTXS, "fallback", 100_000);
+        assert_eq!(order, vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn round_robin_drops_ineligible_but_keeps_count() {
+        let order = order_tiers(CTXS, "round_robin", 500_000);
+        assert_eq!(order.len(), 4, "198K tier must be dropped");
+        assert!(!order.contains(&4), "index 4 (198K) not eligible");
+    }
 }

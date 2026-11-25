@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use super::auth::BjtCredential;
 use super::constants;
-use super::mapper::strip_watermark;
+use super::mapper::{sanitize_reasoning, sanitize_text, WatermarkFilter};
 
 pub struct BjtClient {
     http: Client,
@@ -79,12 +79,14 @@ impl BjtClient {
         let content = message
             .get("content")
             .and_then(|v| v.as_str())
-            .map(|s| strip_watermark(s))
+            .map(sanitize_text)
             .filter(|s| !s.is_empty());
+        // Reasoning keeps every word the model wrote; upstream identity tokens
+        // are renamed to our own name so nothing of the thinking is lost.
         let reasoning_content = message
             .get("reasoning_content")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(sanitize_reasoning)
             .filter(|s| !s.is_empty());
 
         let usage = json.get("usage").map(|u| Usage {
@@ -169,6 +171,12 @@ impl BjtClient {
         let parsed = async_stream::try_stream! {
             let mut buffer = String::new();
             let mut collected_usage: Option<Usage> = None;
+            // Persistent sanitizer: keys + drop rules survive chunk boundaries,
+            // so a marker split across chunks is still removed exactly.
+            let mut wm = WatermarkFilter::new();
+            // Separate filter for reasoning: rename mode keeps the thinking
+            // text whole while stripping upstream branding.
+            let mut wm_reason = WatermarkFilter::new_rename();
             let first_chunk_timeout = std::time::Duration::from_secs(constants::STREAM_FIRST_CHUNK_TIMEOUT_SECS);
             let stall_timeout = std::time::Duration::from_secs(constants::STREAM_STALL_TIMEOUT_SECS);
             let mut first = true;
@@ -189,12 +197,53 @@ impl BjtClient {
                         let data = data.trim();
                         if data.is_empty() || data == "[DONE]" { continue; }
                         if let Ok(v) = serde_json::from_str::<Value>(data) {
-                            if let Some(chunk) = Self::parse_chunk(&v, &model, &mut collected_usage) {
+                            if let Some(chunk) = Self::parse_chunk(&v, &model, &mut collected_usage, Some(&mut wm), Some(&mut wm_reason)) {
                                 yield chunk;
                             }
                         }
                     }
                 }
+            }
+            let reason_tail = wm_reason.finish();
+            if !reason_tail.is_empty() {
+                yield ChatCompletionChunk {
+                    id: format!("chatcmpl-bjt-{}", chrono::Utc::now().timestamp()),
+                    object: "chat.completion.chunk".to_string(),
+                    created: chrono::Utc::now().timestamp() as u64,
+                    model: model.to_string(),
+                    choices: vec![ChunkChoice {
+                        index: 0,
+                        delta: Delta {
+                            role: None,
+                            content: None,
+                            reasoning_content: Some(reason_tail),
+                            tool_calls: None,
+                        },
+                        finish_reason: None,
+                    }],
+                    usage: None,
+                };
+            }
+            // Flush whatever the content sanitizer still held back.
+            let tail = wm.finish();
+            if !tail.is_empty() {
+                yield ChatCompletionChunk {
+                    id: format!("chatcmpl-bjt-{}", chrono::Utc::now().timestamp()),
+                    object: "chat.completion.chunk".to_string(),
+                    created: chrono::Utc::now().timestamp() as u64,
+                    model: model.to_string(),
+                    choices: vec![ChunkChoice {
+                        index: 0,
+                        delta: Delta {
+                            role: None,
+                            content: Some(tail),
+                            reasoning_content: None,
+                            tool_calls: None,
+                        },
+                        finish_reason: None,
+                    }],
+                    usage: None,
+                };
             }
             // Upstream sends usage in a terminal choices:[] chunk (captured by
             // parse_chunk but not yielded). Flush it so usage tracking persists counts.
@@ -216,6 +265,8 @@ impl BjtClient {
         v: &Value,
         model: &str,
         usage: &mut Option<Usage>,
+        wm: Option<&mut WatermarkFilter>,
+        wm_reason: Option<&mut WatermarkFilter>,
     ) -> Option<ChatCompletionChunk> {
         let choices = v
             .get("choices")
@@ -241,16 +292,24 @@ impl BjtClient {
         let idx = choice.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as u32;
         let delta = choice.get("delta").cloned().unwrap_or_default();
 
+        // Stream content goes through the persistent sanitizer so markers split
+        // across chunks are removed exactly, and legitimate spaces survive.
         let content = delta
             .get("content")
             .and_then(|c| c.as_str())
-            .map(|s| strip_watermark(s))
+            .map(|raw| match wm {
+                Some(f) => f.push(raw),
+                None => sanitize_text(raw),
+            })
             .filter(|s| !s.is_empty());
         let reasoning_content = delta
             .get("reasoning_content")
             .or_else(|| delta.get("reasoning"))
             .and_then(|c| c.as_str())
-            .map(|s| s.to_string())
+            .map(|raw| match wm_reason {
+                Some(f) => f.push(raw),
+                None => sanitize_reasoning(raw),
+            })
             .filter(|s| !s.is_empty());
         let finish = choice
             .get("finish_reason")
