@@ -350,7 +350,7 @@ pub(crate) async fn handle_combo_request_stream(
     }; // read lock released here
 
     let mut last_error = None;
-    for (idx, tier_model, model_name, _provider_id, provider) in tier_providers {
+    for (idx, tier_model, model_name, provider_id, provider) in tier_providers {
         let mut tier_req = request.clone();
         tier_req.model = model_name.clone();
         tier_req.stream = Some(true);
@@ -358,8 +358,10 @@ pub(crate) async fn handle_combo_request_stream(
             tier_req.stream_options = Some(serde_json::json!({"include_usage": true}));
         }
 
+        // provider_id goes in the provider_id slot (usage attribution); the full
+        // tier id ("bjt/model") is the model column.
         match crate::api::chat::streaming::handle_streaming(
-            &state, &gw_key, provider.as_ref(), tier_model.as_str(), tier_model.as_str(), &tier_req, start,
+            &state, &gw_key, provider.as_ref(), provider_id.as_str(), tier_model.as_str(), &tier_req, start,
         ).await {
             Ok(resp) => {
                 return Ok(resp);
