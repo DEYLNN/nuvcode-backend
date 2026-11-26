@@ -442,4 +442,29 @@ mod tests {
         assert_eq!(order.len(), 4, "198K tier must be dropped");
         assert!(!order.contains(&4), "index 4 (198K) not eligible");
     }
+
+    #[test]
+    fn balanced_three_tiers_1m_1m_256k_with_300k_prompt() {
+        // The scenario asked about: ctx = [1M, 1M, 256K], estimate 300K.
+        let ctxs = [1_048_576u32, 1_048_576, 262_144];
+        let order = order_tiers(&ctxs, "balanced", 300_000);
+
+        // 256K cannot hold a 300K prompt: it must be dropped entirely, so an
+        // error on T1 falls through to T2 — never to the 256K tier.
+        assert_eq!(order, vec![0, 1], "expected only the two 1M tiers, DB order");
+        assert!(!order.contains(&2), "256K tier must be ineligible at 300K");
+
+        // Both 1M tiers are the tightest fit, so they keep DB order.
+        assert_eq!(ctxs[order[0]], 1_048_576);
+        assert_eq!(ctxs[order[1]], 1_048_576);
+    }
+
+    #[test]
+    fn balanced_three_tiers_1m_1m_256k_with_small_prompt() {
+        // Same tiers, small prompt: 256K is now the tightest fit and leads.
+        let ctxs = [1_048_576u32, 1_048_576, 262_144];
+        let order = order_tiers(&ctxs, "balanced", 1_000);
+        assert_eq!(order[0], 2, "256K is the tightest fit and must lead");
+        assert_eq!(order.len(), 3, "all tiers eligible for a small prompt");
+    }
 }
