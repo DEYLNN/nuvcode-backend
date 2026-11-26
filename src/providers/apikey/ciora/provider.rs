@@ -16,8 +16,13 @@ use super::auth::CraCredential;
 use super::client::CraClient;
 use super::constants;
 
-/// Ciora provider — errors do not lock or deactivate keys. Each request
-/// tries every key at most once, then returns the last upstream error.
+/// Ciora provider — locks keys only on 401/403 (dead/invalid credentials);
+/// every other error (429, 5xx) leaves the key available. Each request tries
+/// every key at most once, then returns the last upstream error.
+fn should_lock_error(status: u16) -> bool {
+    status == 401 || status == 403
+}
+
 pub struct CraProvider {
     metadata: ProviderMetadata,
     keys: KeyManager,
@@ -140,6 +145,10 @@ impl Provider for CraProvider {
                     });
                 }
                 Err(e) => {
+                    let st = e.http_status().unwrap_or(502);
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, e.to_string());
+                    }
                     excluded.push(key_id.clone());
                     last_status = e.http_status();
                     last_error = Some(e.to_string());
@@ -208,6 +217,10 @@ impl Provider for CraProvider {
                     });
                 }
                 Err(e) => {
+                    let st = e.http_status().unwrap_or(502);
+                    if should_lock_error(st) {
+                        self.keys.lock_key(&key_id, st, e.to_string());
+                    }
                     excluded.push(key_id.clone());
                     last_status = e.http_status();
                     last_error = Some(e.to_string());
