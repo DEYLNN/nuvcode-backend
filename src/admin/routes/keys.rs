@@ -727,7 +727,9 @@ pub async fn api_count_keys(
 #[derive(Deserialize)]
 pub struct BulkDeleteRequest {
     pub provider_id: String,
-    /// "all" = delete all keys, otherwise delete by key_value match
+    /// "disabled" = delete only disabled keys (safe bulk),
+    /// "by_key" = delete one key matching key_value.
+    /// "all" is rejected — it wiped active keys too; use "disabled".
     pub action: String,
     #[serde(default)]
     pub key_value: Option<String>,
@@ -739,6 +741,15 @@ pub struct BulkDeleteResponse {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Total keys the provider had before the delete (disabled flow only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total: Option<usize>,
+    /// How many of those were disabled (candidates for deletion).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disabled: Option<usize>,
+    /// Active keys left untouched.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kept_active: Option<usize>,
 }
 
 pub async fn api_bulk_delete_keys(
@@ -758,6 +769,9 @@ pub async fn api_bulk_delete_keys(
                 deleted: 0,
                 message: format!("Provider '{}' not found", req.provider_id),
                 error: Some("unknown provider_id".into()),
+                total: None,
+                disabled: None,
+                kept_active: None,
             });
         }
         Some(cat) if cat != "apikey" => {
@@ -765,17 +779,101 @@ pub async fn api_bulk_delete_keys(
                 deleted: 0,
                 message: format!("Provider '{}' is not apikey", req.provider_id),
                 error: Some("only apikey providers allowed".into()),
+                total: None,
+                disabled: None,
+                kept_active: None,
             });
         }
         _ => {}
     }
 
-    let result = if req.action == "all" {
-        sqlx::query("DELETE FROM api_keys WHERE provider_id = $1")
-            .bind(&req.provider_id)
-            .execute(&state.db)
-            .await
-    } else if let Some(kv) = &req.key_value {
+    // Fetch all keys for the provider first, split by state, then delete
+    // ONLY the disabled ones — active keys are never touched by bulk flow.
+    if req.action == "disabled" {
+        let rows: Vec<(String, bool)> = match sqlx::query_as(
+            "SELECT id, is_active FROM api_keys WHERE provider_id = $1",
+        )
+        .bind(&req.provider_id)
+        .fetch_all(&state.db)
+        .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Json(BulkDeleteResponse {
+                    deleted: 0,
+                    message: format!("Failed to fetch keys: {}", e),
+                    error: Some("db error".into()),
+                    total: None,
+                    disabled: None,
+                    kept_active: None,
+                });
+            }
+        };
+        let total = rows.len();
+        let disabled: Vec<String> = rows
+            .iter()
+            .filter(|(_, active)| !*active)
+            .map(|(id, _)| id.clone())
+            .collect();
+        let disabled_count = disabled.len();
+        let kept_active = total - disabled_count;
+
+        if disabled.is_empty() {
+            return Json(BulkDeleteResponse {
+                deleted: 0,
+                message: format!(
+                    "No disabled keys for '{}' — all {} key(s) are active, nothing deleted",
+                    req.provider_id, total
+                ),
+                error: None,
+                total: Some(total),
+                disabled: Some(0),
+                kept_active: Some(kept_active),
+            });
+        }
+
+        let mut deleted: usize = 0;
+        for id in &disabled {
+            if let Ok(r) = sqlx::query("DELETE FROM api_keys WHERE id = $1")
+                .bind(id)
+                .execute(&state.db)
+                .await
+            {
+                deleted += r.rows_affected() as usize;
+            }
+        }
+
+        if deleted > 0 {
+            let mut pm = state.provider_manager.write().await;
+            let _ = pm.reload_provider(&req.provider_id).await;
+        }
+        return Json(BulkDeleteResponse {
+            deleted,
+            message: format!(
+                "Deleted {} disabled key(s) from {}; {} active key(s) untouched",
+                deleted, req.provider_id, kept_active
+            ),
+            error: None,
+            total: Some(total),
+            disabled: Some(disabled_count),
+            kept_active: Some(kept_active),
+        });
+    }
+
+    if req.action == "all" {
+        return Json(BulkDeleteResponse {
+            deleted: 0,
+            message: "action 'all' is not allowed — it deletes active keys too. \
+                      Use action 'disabled' to remove only disabled keys, or 'by_key'."
+                .into(),
+            error: Some("unsafe action rejected".into()),
+            total: None,
+            disabled: None,
+            kept_active: None,
+        });
+    }
+
+    let result = if let Some(kv) = &req.key_value {
         sqlx::query("DELETE FROM api_keys WHERE provider_id = $1 AND key_value = $2")
             .bind(&req.provider_id)
             .bind(kv)
@@ -784,8 +882,11 @@ pub async fn api_bulk_delete_keys(
     } else {
         return Json(BulkDeleteResponse {
             deleted: 0,
-            message: "action must be 'all' or provide key_value".into(),
+            message: "action must be 'disabled' or provide key_value for 'by_key'".into(),
             error: Some("invalid action".into()),
+            total: None,
+            disabled: None,
+            kept_active: None,
         });
     };
 
@@ -800,12 +901,18 @@ pub async fn api_bulk_delete_keys(
                 deleted,
                 message: format!("Deleted {} key(s) from {}", deleted, req.provider_id),
                 error: None,
+                total: None,
+                disabled: None,
+                kept_active: None,
             })
         }
         Err(e) => Json(BulkDeleteResponse {
             deleted: 0,
             message: format!("Failed: {}", e),
             error: Some("db error".into()),
+            total: None,
+            disabled: None,
+            kept_active: None,
         }),
     }
 }
