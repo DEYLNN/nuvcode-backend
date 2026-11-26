@@ -89,6 +89,7 @@ impl ProviderRegistry {
         register_provider!(registry, "pkt", crate::providers::apikey::packet::provider::PktProvider::new_with_keys, db);
         register_provider!(registry, "exl", crate::providers::apikey::experiential::provider::ExlProvider::new_with_keys, db);
         register_provider!(registry, "bjt", crate::providers::apikey::bajingan::provider::BjtProvider::new_with_keys, db);
+        register_provider!(registry, "tr", crate::providers::apikey::tokenrouter::provider::TrProvider::new_with_keys, db);
 
         registry
     }

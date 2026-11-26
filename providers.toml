@@ -1415,25 +1415,6 @@ vision = false
 tools = true
 
 
-[[providers]]
-id = "tr"
-name = "TokenRouter"
-category = "apikey"
-color = "#111827"
-icon = "tokenrouter.jpg"
-base_url = "https://api.tokenrouter.com"
-validate_url = "https://api.tokenrouter.com/v1/models"
-api_type = "openai"
-timeout = 64
-first_chunk_timeout = 120
-stall_timeout = 120
-
-[[providers.models]]
-id = "deepseek/deepseek-v4-flash"
-name = "DeepSeek V4 Flash"
-ctx = 1000000
-vision = false
-tools = true
 
 
 [[providers]]
