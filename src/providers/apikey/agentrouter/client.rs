@@ -243,7 +243,7 @@ impl AgrClient {
             .cloned()
             .unwrap_or_default();
         if choices.is_empty() {
-            if let Some(u) = v.get("usage") {
+            if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
                 *usage = Some(Usage {
                     prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
                         as u32,
@@ -284,7 +284,7 @@ impl AgrClient {
         });
 
         if usage.is_none() {
-            if let Some(u) = v.get("usage") {
+            if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
                 *usage = Some(Usage {
                     prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
                         as u32,

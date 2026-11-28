@@ -282,7 +282,7 @@ impl OcfClient {
             .cloned()
             .unwrap_or_default();
         if choices.is_empty() {
-            if let Some(u) = v.get("usage") {
+            if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
                 *usage = Some(Usage {
                     prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
                         as u32,
@@ -316,7 +316,7 @@ impl OcfClient {
 
         // Only collect usage from chunks — don't attach to yielded chunk.
         // The final chunk (choices empty) sets usage, then we yield it separately.
-        if let Some(u) = v.get("usage") {
+        if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
             let new_usage = Usage {
                 prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0)
                     as u32,

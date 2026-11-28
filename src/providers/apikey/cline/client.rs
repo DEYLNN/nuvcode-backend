@@ -176,6 +176,19 @@ impl ClClient {
                     }
                 }
             }
+            // Flush collected usage in a terminal chunk so the gateway persists
+            // token counts (upstream sends usage on the choices:[] chunk, which
+            // parse_chunk collects but does not yield).
+            if let Some(u) = collected_usage.take() {
+                yield ChatCompletionChunk {
+                    id: format!("chatcmpl-cl-{}", chrono::Utc::now().timestamp()),
+                    object: "chat.completion.chunk".to_string(),
+                    created: chrono::Utc::now().timestamp() as u64,
+                    model: model.to_string(),
+                    choices: vec![],
+                    usage: Some(u),
+                };
+            }
         };
         Ok(parsed.boxed())
     }
@@ -183,7 +196,7 @@ impl ClClient {
     fn parse_chunk(v: &Value, model: &str, usage: &mut Option<Usage>, content_buffer: &mut String) -> Option<ChatCompletionChunk> {
         let choices = v.get("choices").and_then(|c| c.as_array()).cloned().unwrap_or_default();
         if choices.is_empty() {
-            if let Some(u) = v.get("usage") {
+            if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
                 *usage = Some(Usage {
                     prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
                     completion_tokens: u.get("completion_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
@@ -226,7 +239,7 @@ impl ClClient {
         }
         // Also check for usage in the top-level v (some providers send it)
         if usage.is_none() {
-            if let Some(u) = v.get("usage") {
+            if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
                 *usage = Some(Usage {
                     prompt_tokens: u.get("prompt_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
                     completion_tokens: u.get("completion_tokens").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
